@@ -50,6 +50,9 @@
 - [x] Auth logout test (1 test)
 - [x] All 15 tests passing
 
+## Bug Fixes
+- [x] Fix mobile view chat box — layout, input, and scrolling broken on small screens
+
 ## Pending / Future Enhancements
 - [ ] Add more country pairs (US-CA, CN-CA, RU-IL)
 - [ ] Add news feed integration (GDELT or NewsAPI) for real-time events
