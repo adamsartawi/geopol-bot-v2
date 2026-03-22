@@ -28,11 +28,19 @@ export type FactCheckStatus =
   | "contradicted"      // Sources actively contradict the claim
   | "kb_updated";       // KB was updated with verified information
 
+export interface NewsArticle {
+  title: string;
+  url: string;
+  domain: string;
+  seendate: string;
+}
+
 export interface FactCheckResult {
   status: FactCheckStatus;
   claim: string;                  // The extracted claim
   confidence: number;             // 0-1 confidence in verification
   sources: string[];              // URLs of corroborating articles
+  newsContext: NewsArticle[];     // Full article data for system prompt injection
   kbUpdatesApplied: number;       // Number of KB fields updated
   summary: string;                // Human-readable summary of what was found
   verifiedAt: Date;
@@ -411,6 +419,7 @@ export async function factCheckUserClaim(userMessage: string): Promise<FactCheck
       claim: "",
       confidence: 0,
       sources: [],
+      newsContext: [],
       kbUpdatesApplied: 0,
       summary: "No verifiable factual claim detected in the message.",
       verifiedAt,
@@ -433,6 +442,7 @@ export async function factCheckUserClaim(userMessage: string): Promise<FactCheck
       claim: extracted.claim,
       confidence: verification.confidence,
       sources: verification.relevantSources,
+      newsContext: articles,  // Still pass articles so bot can discuss what sources say
       kbUpdatesApplied: 0,
       summary: `Claim contradicted by sources: ${verification.reasoning}`,
       verifiedAt,
@@ -445,6 +455,7 @@ export async function factCheckUserClaim(userMessage: string): Promise<FactCheck
       claim: extracted.claim,
       confidence: verification.confidence,
       sources: verification.relevantSources,
+      newsContext: articles,  // Pass articles even if unverified — bot can still use them
       kbUpdatesApplied: 0,
       summary: `Could not verify: ${verification.reasoning}`,
       verifiedAt,
@@ -465,6 +476,7 @@ export async function factCheckUserClaim(userMessage: string): Promise<FactCheck
       claim: extracted.claim,
       confidence: verification.confidence,
       sources: verification.relevantSources,
+      newsContext: articles,
       kbUpdatesApplied: 0,
       summary: `Verified (confidence ${Math.round(verification.confidence * 100)}%) but no KB fields required updating. ${verification.reasoning}`,
       verifiedAt,
@@ -488,6 +500,7 @@ export async function factCheckUserClaim(userMessage: string): Promise<FactCheck
     claim: extracted.claim,
     confidence: verification.confidence,
     sources: verification.relevantSources,
+    newsContext: articles,
     kbUpdatesApplied,
     summary: `Verified and KB updated (${kbUpdatesApplied} field${kbUpdatesApplied !== 1 ? "s" : ""} updated). ${verification.reasoning}`,
     verifiedAt,
@@ -499,6 +512,7 @@ export async function factCheckUserClaim(userMessage: string): Promise<FactCheck
       claim: "",
       confidence: 0,
       sources: [],
+      newsContext: [],
       kbUpdatesApplied: 0,
       summary: "Fact-check failed due to an internal error.",
       verifiedAt,

@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { nanoid } from "nanoid";
 import { Streamdown } from "streamdown";
-import { ChatMessage, streamChatResponse, generatePairBrief, detectPairFromQuestion, LiveKBData } from "@/lib/chatEngine";
+import { ChatMessage, streamChatResponse, generatePairBrief, detectPairFromQuestion, LiveKBData, NewsArticle } from "@/lib/chatEngine";
 import { COUNTRIES, COUNTRY_PAIRS, MIDDLE_EAST_SCENARIOS, SUGGESTED_QUESTIONS } from "@/lib/geopoliticalData";
 import { useMarketData } from "@/hooks/useMarketData";
 import CountrySidebar from "@/components/CountrySidebar";
@@ -97,6 +97,7 @@ What would you like to explore? You can select a country pair from the matrix, o
       setFactCheckStatus({ text: "Searching external sources...", type: "info" });
       let fcResult: any = null;
       let liveKB: LiveKBData | undefined;
+      let liveNewsContext: NewsArticle[] | undefined;
 
       try {
         const fcRes = await fetch("/api/geopol/factcheck", {
@@ -105,6 +106,10 @@ What would you like to explore? You can select a country pair from the matrix, o
           body: JSON.stringify({ message: text }),
         });
         fcResult = await fcRes.json();
+        // Extract news articles for system prompt injection
+        if (fcResult?.newsContext?.length > 0) {
+          liveNewsContext = fcResult.newsContext;
+        }
       } catch { /* factcheck failed — proceed with static KB */ }
 
       // Step 2: If KB was updated, fetch fresh snapshot before streaming
@@ -123,7 +128,8 @@ What would you like to explore? You can select a country pair from the matrix, o
       } else if (fcResult?.status === "verified") {
         setFactCheckStatus({ text: "Claim verified — answering now", type: "ok" });
       } else if (fcResult?.status === "unverified") {
-        setFactCheckStatus({ text: "Could not verify externally — answering from KB", type: "info" });
+        const articleCount = fcResult?.newsContext?.length ?? 0;
+        setFactCheckStatus({ text: articleCount > 0 ? `Found ${articleCount} related article${articleCount !== 1 ? 's' : ''} — answering with live news context` : "Could not verify externally — answering from KB", type: "info" });
       } else {
         // no_claim or error — clear indicator, answer normally
         setFactCheckStatus(null);
@@ -140,7 +146,7 @@ What would you like to explore? You can select a country pair from the matrix, o
         );
       }
 
-      for await (const chunk of streamChatResponse(allMessages, marketData, liveKB)) {
+      for await (const chunk of streamChatResponse(allMessages, marketData, liveKB, liveNewsContext)) {
         content += chunk;
         setMessages(prev =>
           prev.map(m => m.id === assistantId ? { ...m, content } : m)

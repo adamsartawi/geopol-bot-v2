@@ -78,6 +78,14 @@ export interface LiveKBData {
   }>;
 }
 
+// ── Real-time news context from GDELT fact-check ────────────────────────────
+export interface NewsArticle {
+  title: string;
+  url: string;
+  domain: string;
+  seendate: string;
+}
+
 // ── Full data serialization helpers ───────────────────────────────────────────
 function serializeCountryProfile(c: CountryProfile): string {
   return [
@@ -148,7 +156,7 @@ function serializeLiveMarket(marketData: MarketData[]): string {
 
 // ── System prompt — full data injection, strict grounding ───────────────────────────────────────────
 
-function buildSystemPrompt(marketData: MarketData[], liveKB?: LiveKBData): string {
+function buildSystemPrompt(marketData: MarketData[], liveKB?: LiveKBData, liveNewsContext?: NewsArticle[]): string {
   let allCountryProfiles: string;
   let allPairs: string;
   let allScenarios: string;
@@ -239,7 +247,16 @@ ${liveMarket}
 
 Today: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-REMINDER: Use the knowledge base data as your primary source. For events not in the KB, analyze using country profiles and relationship context — never refuse to engage.`;
+${liveNewsContext && liveNewsContext.length > 0 ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REAL-TIME NEWS CONTEXT (retrieved ${new Date().toUTCString()})
+The following articles were retrieved live from GDELT news database for this specific question.
+USE THESE ARTICLES to answer the question directly. Cite the source domain when referencing them.
+After your answer, add this note: "Note: My structured knowledge base updates every 6 hours. This answer incorporates live news retrieved at ${new Date().toUTCString()}."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${liveNewsContext.map((a, i) => `[${i+1}] "${a.title}" — ${a.domain} (${a.seendate?.slice(0,8) ?? "recent"})\n    URL: ${a.url}`).join("\n")}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` : ""}
+REMINDER: Use the knowledge base as your primary source for WRDI scores and bilateral assessments. When real-time news context is provided above, use it to answer current-events questions directly. Never refuse to engage — always provide the best analysis using all available data.`;
 }
 
 // ── Stream response ──────────────────────────────────────────────────────────
@@ -247,9 +264,10 @@ REMINDER: Use the knowledge base data as your primary source. For events not in 
 export async function* streamChatResponse(
   messages: ChatMessage[],
   marketData: MarketData[],
-  liveKB?: LiveKBData
+  liveKB?: LiveKBData,
+  liveNewsContext?: NewsArticle[]
 ): AsyncGenerator<string> {
-  const systemPrompt = buildSystemPrompt(marketData, liveKB);
+  const systemPrompt = buildSystemPrompt(marketData, liveKB, liveNewsContext);
 
   const apiMessages = [
     { role: "system", content: systemPrompt },

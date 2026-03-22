@@ -136,3 +136,14 @@
 - [x] Update system prompt: removed hard "refuse if outside KB" rule. Bot now analyzes using country profiles and relationship data for events not in KB
 - [x] Update system prompt: NEVER say "outside my data coverage" — always provide best analysis using available context
 - [x] Update REMINDER: use KB as primary source, not exclusive source
+
+## Feature: Real-Time News Context Injection
+- [x] Add NewsArticle interface to FactCheckResult and return articles from all return paths
+- [x] Pass newsContext articles through factcheck endpoint to frontend
+- [x] Add NewsArticle type to chatEngine.ts and streamChatResponse signature
+- [x] Inject articles as REAL-TIME NEWS CONTEXT section in buildSystemPrompt when available
+- [x] System prompt instructs bot to USE articles and cite source domain
+- [x] System prompt adds KB update timestamp note: "Note: KB updates every 6 hours. This answer incorporates live news retrieved at [time]."
+- [x] sendMessage extracts liveNewsContext from factcheck result and passes to streamChatResponse
+- [x] Status indicator shows article count when news found but unverified
+- [x] 56 tests passing
