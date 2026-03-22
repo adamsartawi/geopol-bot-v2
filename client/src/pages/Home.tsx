@@ -92,70 +92,72 @@ What would you like to explore? You can select a country pair from the matrix, o
 
       const allMessages = [...messages, userMsg];
 
-      // ── Kick off fact-check in parallel (non-blocking) ──
-      const factCheckPromise = fetch("/api/geopol/factcheck", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-      }).then(r => r.json()).catch(() => null);
+      // Step 1: Run fact-check FIRST (blocking) before streaming
+      // This ensures the bot answers with verified/updated data
+      setFactCheckStatus({ text: "Searching external sources...", type: "info" });
+      let fcResult: any = null;
+      let liveKB: LiveKBData | undefined;
 
-      // ── First pass: stream with static KB ──
-      let firstPassContent = "";
-      for await (const chunk of streamChatResponse(allMessages, marketData)) {
-        firstPassContent += chunk;
-        setMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content: firstPassContent } : m)
-        );
-      }
+      try {
+        const fcRes = await fetch("/api/geopol/factcheck", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text }),
+        });
+        fcResult = await fcRes.json();
+      } catch { /* factcheck failed — proceed with static KB */ }
 
-      // ── Await fact-check result ──
-      const fcResult = await factCheckPromise;
-
+      // Step 2: If KB was updated, fetch fresh snapshot before streaming
       if (fcResult?.status === "kb_updated" && fcResult.kbUpdatesApplied > 0) {
         const fieldsUpdated = fcResult.kbUpdatesApplied;
-        setFactCheckStatus({ text: `Verified ✓ — KB updated (${fieldsUpdated} field${fieldsUpdated !== 1 ? "s" : ""})`, type: "ok" });
-
-        // Fetch fresh KB snapshot
-        let liveKB: LiveKBData | undefined;
+        setFactCheckStatus({
+          text: `Verified — KB updated (${fieldsUpdated} field${fieldsUpdated !== 1 ? "s" : ""}). Answering with updated data...`,
+          type: "ok"
+        });
         try {
           const kbRes = await fetch("/api/geopol/kb-snapshot");
           if (kbRes.ok) liveKB = await kbRes.json();
         } catch { /* use static KB */ }
-
-        // Append verification notice
-        const verifyNote = `\n\n---\n*⚠️ Claim verified by external sources (${Math.round(fcResult.confidence * 100)}% confidence). Knowledge base updated with ${fieldsUpdated} new data point${fieldsUpdated !== 1 ? "s" : ""}. Re-analyzing with updated data...*`;
-        setMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content: firstPassContent + verifyNote } : m)
-        );
-        await new Promise(r => setTimeout(r, 600));
-
-        // Re-stream with updated KB
-        const reMessages = [
-          ...allMessages,
-          { id: nanoid(), role: "assistant" as const, content: firstPassContent, timestamp: new Date() },
-          { id: nanoid(), role: "user" as const, content: "Re-answer my previous question using the newly updated knowledge base.", timestamp: new Date() },
-        ];
-        let reContent = firstPassContent + verifyNote + "\n\n**Updated analysis:**\n";
-        for await (const chunk of streamChatResponse(reMessages, marketData, liveKB)) {
-          reContent += chunk;
-          setMessages(prev =>
-            prev.map(m => m.id === assistantId ? { ...m, content: reContent } : m)
-          );
-        }
-        setTimeout(() => setFactCheckStatus(null), 6000);
-
       } else if (fcResult?.status === "contradicted") {
-        setFactCheckStatus({ text: `Claim contradicted by sources`, type: "warn" });
-        const warnNote = `\n\n---\n*⚠️ External sources contradict this claim. ${fcResult.summary}*`;
-        setMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content: firstPassContent + warnNote } : m)
-        );
-        setTimeout(() => setFactCheckStatus(null), 6000);
-
+        setFactCheckStatus({ text: "Sources contradict this claim — answering with verified data", type: "warn" });
       } else if (fcResult?.status === "verified") {
-        setFactCheckStatus({ text: `Verified ✓ (no KB update needed)`, type: "info" });
-        setTimeout(() => setFactCheckStatus(null), 4000);
+        setFactCheckStatus({ text: "Claim verified — answering now", type: "ok" });
+      } else if (fcResult?.status === "unverified") {
+        setFactCheckStatus({ text: "Could not verify externally — answering from KB", type: "info" });
+      } else {
+        // no_claim or error — clear indicator, answer normally
+        setFactCheckStatus(null);
       }
+
+      // Step 3: Stream the answer (with liveKB if KB was updated)
+      let content = "";
+
+      // If claim was contradicted, prepend a note before the answer
+      if (fcResult?.status === "contradicted") {
+        content = `*Note: External sources contradict the claim you mentioned. ${fcResult.summary}*\n\n`;
+        setMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content } : m)
+        );
+      }
+
+      for await (const chunk of streamChatResponse(allMessages, marketData, liveKB)) {
+        content += chunk;
+        setMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content } : m)
+        );
+      }
+
+      // If KB was updated, append a note at the end of the answer
+      if (fcResult?.status === "kb_updated" && fcResult.kbUpdatesApplied > 0) {
+        const fieldsUpdated = fcResult.kbUpdatesApplied;
+        const note = `\n\n---\n*Knowledge base updated with verified data (${fieldsUpdated} field${fieldsUpdated !== 1 ? "s" : ""}, ${Math.round(fcResult.confidence * 100)}% confidence). This answer reflects the latest information.*`;
+        setMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content: content + note } : m)
+        );
+      }
+
+      // Clear status after a delay
+      setTimeout(() => setFactCheckStatus(null), 5000);
 
     } catch {
       setMessages(prev =>

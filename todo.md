@@ -123,3 +123,10 @@
 - [x] Add factCheckStatus UI indicator in chat header (green=verified, red=contradicted, cyan=info)
 - [x] Write 10 unit tests for fact-check engine (56 total, all passing)
 - [x] Add top-level try-catch in factCheckUserClaim for graceful error handling
+
+## Bug Fix — Fact-Check Race Condition
+- [x] Fix sendMessage: factcheck now runs BEFORE stream starts (was parallel/too late)
+- [x] Show "Searching external sources..." status in chat while factcheck runs (before stream begins)
+- [x] Stream only starts after factcheck completes; passes updated KB snapshot if KB was updated
+- [x] Contradicted claims: prepend warning note before the answer
+- [x] KB-updated claims: append verification note at the end of the answer
