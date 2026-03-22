@@ -160,3 +160,50 @@
 - [x] Replaced "proxy conflicts" and "Proxy conflict involvement" in WRDIPanel.tsx
 - [x] Added NEUTRAL LANGUAGE rule 6 to system prompt in chatEngine.ts (applies to all languages including Arabic)
 - [x] 56 tests passing, 0 TypeScript errors
+
+## Feature: Glossary Page
+- [x] Build Glossary page component (dark terminal theme, searchable, filterable by section)
+- [x] Section 1: WRDI Indicators — 4 dimensions, score bands (VERY LOW → CRITICAL), formula
+- [x] Section 2: UI Elements — all tabs and panels explained (MATRIX, MARKETS, RISKS, PIPELINE, SCORES, PAIRS, REPORT)
+- [x] Section 3: Geopolitical Terms — WRDI Differential, Tension Score, Middle East Impact, Bilateral Pair, etc.
+- [x] Add GLOSSARY button to top navigation bar in Home.tsx
+- [x] Register /glossary route in App.tsx
+- [x] Add back navigation from Glossary page to main interface
+
+## Feature: New Country Profiles (Iran, India, GCC)
+- [x] Add Iran (IR) country profile to geopoliticalData.ts with full WRDI dimensions
+- [x] Add India (IN) country profile to geopoliticalData.ts with full WRDI dimensions
+- [x] Add GCC (Gulf Cooperation Council) unified profile to geopoliticalData.ts with full WRDI dimensions
+- [x] Add WRDI engine profiles for IR, IN, GCC in wrdiEngine.ts
+- [x] Add IR, IN, GCC to COUNTRIES array and LIVE_DATA_CONFIGS (market symbols)
+- [x] Add IR, IN, GCC to pipeline COUNTRY_IDS, COUNTRY_NAMES, and GDELT_COUNTRY_MAP
+
+## Feature: New Bilateral Pairs (9 new pairs)
+- [x] IR-US: Iran–United States (adversarial, nuclear/sanctions focus)
+- [x] IR-IL: Iran–Israel (high tension, military/nuclear)
+- [x] IR-RU: Iran–Russia (strategic alignment, energy/arms)
+- [x] IN-CN: India–China (border tension, economic rivalry)
+- [x] IN-US: India–United States (strategic partnership, Indo-Pacific)
+- [x] IN-RU: India–Russia (historical ties, energy/defense)
+- [x] GCC-IR: Gulf States–Iran (sectarian/regional rivalry)
+- [x] GCC-US: Gulf States–United States (security alliance, oil)
+- [x] GCC-IL: Gulf States–Israel (normalization, Abraham Accords)
+
+## Feature: Local News RSS Sources
+- [x] Add IRNA RSS feed (Iranian state news) to pipeline
+- [x] Add PressTV RSS feed (Iranian English-language) to pipeline
+- [x] Add Mehr News RSS feed (Iranian) to pipeline
+- [x] Add Xinhua RSS feed (Chinese state news) to pipeline
+- [x] Add Global Times RSS feed (Chinese English-language) to pipeline
+- [x] Add CGTN RSS feed (Chinese international) to pipeline
+- [x] Add TASS RSS feed (Russian state news) to pipeline
+- [x] Add RT RSS feed (Russian English-language) to pipeline
+- [x] Add Sputnik RSS feed (Russian international) to pipeline
+- [x] Add The Hindu RSS feed (Indian independent) to pipeline
+- [x] Add NDTV RSS feed (Indian independent) to pipeline
+- [x] Add Al Jazeera RSS feed (Gulf/Middle East) to pipeline
+- [x] Add Arab News RSS feed (Gulf) to pipeline
+- [x] Add Gulf News RSS feed (Gulf) to pipeline
+- [x] RSS fetcher parses both RSS and Atom formats, filters to last 48h
+- [x] Source bias metadata (state/independent) included in raw event data
+- [x] Pipeline classifyEvent prompt updated to include IR, IN, GCC as monitored countries

@@ -14,16 +14,18 @@ import { invokeLLM } from "./_core/llm";
 type DB = any;
 
 // ── Country mapping ──────────────────────────────────────────────────────────
-const COUNTRY_IDS = ["US", "CN", "RU", "IL", "CA", "EU"];
+const COUNTRY_IDS = ["US", "CN", "RU", "IL", "CA", "EU", "IR", "IN", "GCC"];
 const COUNTRY_NAMES: Record<string, string> = {
   US: "United States", CN: "China", RU: "Russia",
   IL: "Israel", CA: "Canada", EU: "Europe",
+  IR: "Iran", IN: "India", GCC: "Gulf States (GCC)",
 };
 
 // GDELT country codes mapped to our IDs
 const GDELT_COUNTRY_MAP: Record<string, string> = {
   US: "US", USA: "US", CHN: "CN", RUS: "RU", ISR: "IL",
   CAN: "CA", EUN: "EU", GBR: "EU", DEU: "EU", FRA: "EU",
+  IRN: "IR", IND: "IN", SAU: "GCC", UAE: "GCC", QAT: "GCC", KWT: "GCC", BHR: "GCC", OMN: "GCC",
 };
 
 // ── Source fetchers ──────────────────────────────────────────────────────────
@@ -262,7 +264,96 @@ async function fetchEIA(): Promise<RawEvent[]> {
   return events;
 }
 
-// ── Types ────────────────────────────────────────────────────────────────────
+
+/**
+ * Regional news RSS feeds — state media and major outlets from Iran, Russia,
+ * China, India, Gulf States, and the Middle East.
+ * Uses a CORS-free server-side fetch; parses minimal RSS/Atom XML.
+ */
+const RSS_SOURCES: Array<{ name: string; url: string; country: string; bias: string }> = [
+  // Iran
+  { name: "IRNA",     url: "https://en.irna.ir/rss",                         country: "IR",  bias: "state" },
+  { name: "PressTV",  url: "https://www.presstv.ir/rss.xml",                  country: "IR",  bias: "state" },
+  { name: "Mehr",     url: "https://en.mehrnews.com/rss",                     country: "IR",  bias: "state" },
+  // Russia
+  { name: "TASS",     url: "https://tass.com/rss/v2.xml",                     country: "RU",  bias: "state" },
+  { name: "RT",       url: "https://www.rt.com/rss/",                         country: "RU",  bias: "state" },
+  { name: "Sputnik",  url: "https://sputnikglobe.com/export/rss2/archive/index.xml", country: "RU", bias: "state" },
+  // China
+  { name: "Xinhua",   url: "https://feeds.feedburner.com/xinhuanet/news",     country: "CN",  bias: "state" },
+  { name: "GlobalTimes", url: "https://www.globaltimes.cn/rss/outbrain.xml",  country: "CN",  bias: "state" },
+  { name: "CGTN",     url: "https://www.cgtn.com/subscribe/rss/section/world.do", country: "CN", bias: "state" },
+  // India
+  { name: "TheHindu", url: "https://www.thehindu.com/news/international/?service=rss", country: "IN", bias: "independent" },
+  { name: "NDTV",     url: "https://feeds.feedburner.com/ndtvnews-world-news", country: "IN", bias: "independent" },
+  // Gulf / Middle East
+  { name: "AlJazeera",url: "https://www.aljazeera.com/xml/rss/all.xml",       country: "GCC", bias: "independent" },
+  { name: "ArabNews", url: "https://www.arabnews.com/rss.xml",                country: "GCC", bias: "independent" },
+  { name: "GulfNews", url: "https://gulfnews.com/rss",                        country: "GCC", bias: "independent" },
+];
+
+/** Minimal RSS/Atom XML parser — extracts <item> or <entry> elements */
+function parseRSSItems(xml: string, maxItems = 8): Array<{ title: string; link: string; pubDate: string; description: string }> {
+  const items: Array<{ title: string; link: string; pubDate: string; description: string }> = [];
+  // Match both RSS <item> and Atom <entry>
+  const itemRegex = /<(?:item|entry)[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = itemRegex.exec(xml)) !== null && items.length < maxItems) {
+    const block = match[1];
+    const title = (/<title[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/title>/.exec(block)?.[1] ||
+                   /<title[^>]*>([^<]*)<\/title>/.exec(block)?.[1] || "").trim();
+    const link  = (/<link[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/link>/.exec(block)?.[1] ||
+                   /<link[^>]*href=["']([^"']+)["']/.exec(block)?.[1] ||
+                   /<link[^>]*>([^<]*)<\/link>/.exec(block)?.[1] || "").trim();
+    const pubDate = (/<pubDate[^>]*>([^<]*)<\/pubDate>/.exec(block)?.[1] ||
+                     /<published[^>]*>([^<]*)<\/published>/.exec(block)?.[1] ||
+                     /<updated[^>]*>([^<]*)<\/updated>/.exec(block)?.[1] || "").trim();
+    const desc  = (/<description[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/description>/.exec(block)?.[1] ||
+                   /<description[^>]*>([^<]*)<\/description>/.exec(block)?.[1] ||
+                   /<summary[^>]*>([^<]*)<\/summary>/.exec(block)?.[1] || "").trim();
+    if (title) items.push({ title, link, pubDate, description: desc.replace(/<[^>]+>/g, "").slice(0, 300) });
+  }
+  return items;
+}
+
+async function fetchRSSFeeds(): Promise<RawEvent[]> {
+  const events: RawEvent[] = [];
+  const results = await Promise.allSettled(
+    RSS_SOURCES.map(async (src) => {
+      const res = await fetch(src.url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; GeopolBot/1.0; +https://geopol.int)" },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const xml = await res.text();
+      const items = parseRSSItems(xml, 6);
+      return { src, items };
+    })
+  );
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    const { src, items } = result.value;
+    for (const item of items) {
+      let eventDate: Date;
+      try { eventDate = item.pubDate ? new Date(item.pubDate) : new Date(); }
+      catch { eventDate = new Date(); }
+      // Only include items from the last 48 hours
+      if (Date.now() - eventDate.getTime() > 48 * 60 * 60 * 1000) continue;
+      events.push({
+        source: src.name,
+        sourceUrl: item.link || src.url,
+        title: item.title,
+        summary: item.description || `From ${src.name} (${src.bias} media, ${COUNTRY_NAMES[src.country] ?? src.country})`,
+        eventDate,
+        rawData: { ...item, sourceName: src.name, sourceCountry: src.country, sourceBias: src.bias },
+      });
+    }
+  }
+  console.log(`[Pipeline] RSS feeds: ${events.length} articles from ${RSS_SOURCES.length} sources`);
+  return events;
+}
+
+// ── Types ──────────────────────────────────────────────────────────
 interface RawEvent {
   source: string;
   sourceUrl?: string;
@@ -308,7 +399,7 @@ WRDI DIMENSIONS:
 - social (weight 20%): refugees, protests, human rights, food security, public health
 - multiple: affects more than one dimension equally
 
-COUNTRIES TO MONITOR: US, CN (China), RU (Russia), IL (Israel), CA (Canada), EU (Europe)
+COUNTRIES TO MONITOR: US, CN (China), RU (Russia), IL (Israel), CA (Canada), EU (Europe), IR (Iran), IN (India), GCC (Gulf Cooperation Council: Saudi Arabia, UAE, Qatar, Kuwait, Bahrain, Oman)
 MIDDLE EAST COUNTRIES: SA (Saudi Arabia), IR (Iran), SY (Syria), LB (Lebanon), PS (Palestine), YE (Yemen), IQ (Iraq), AE (UAE), JO (Jordan), EG (Egypt)
 
 Return ONLY valid JSON with this exact structure:
@@ -576,15 +667,15 @@ export async function runPipeline(): Promise<{
   try {
     // ── Step 1: Fetch from all sources ──────────────────────────────────────
     console.log("[Pipeline] Fetching from sources...");
-    const [gdeltEvents, acledEvents, wbEvents, imfEvents, unhcrEvents, eiaEvents] = await Promise.allSettled([
+     const [gdeltEvents, acledEvents, wbEvents, imfEvents, unhcrEvents, eiaEvents, rssEvents] = await Promise.allSettled([
       fetchGDELT(),
       fetchACLED(),
       fetchWorldBank(),
       fetchIMF(),
       fetchUNHCR(),
       fetchEIA(),
+      fetchRSSFeeds(),
     ]);
-
     const allRawEvents: RawEvent[] = [];
     const addEvents = (result: PromiseSettledResult<RawEvent[]>, sourceName: string) => {
       if (result.status === "fulfilled" && result.value.length > 0) {
@@ -593,13 +684,13 @@ export async function runPipeline(): Promise<{
         console.log(`[Pipeline] ${sourceName}: ${result.value.length} events`);
       }
     };
-
     addEvents(gdeltEvents, "GDELT");
     addEvents(acledEvents, "ACLED");
     addEvents(wbEvents, "WorldBank");
     addEvents(imfEvents, "IMF");
     addEvents(unhcrEvents, "UNHCR");
     addEvents(eiaEvents, "EIA");
+    addEvents(rssEvents, "RSS");
 
     eventsIngested = allRawEvents.length;
     console.log(`[Pipeline] Total events ingested: ${eventsIngested}`);

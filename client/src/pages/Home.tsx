@@ -22,10 +22,12 @@ import { MiddleEastScenario } from "@/lib/geopoliticalData";
 import {
   Send, RefreshCw, AlertTriangle, Zap, Globe,
   ChevronRight, MessageSquare, Map, BarChart2, Activity, Cpu,
-  SearchCheck
+  SearchCheck, BookOpen
 } from "lucide-react";
+import { useLocation } from "wouter";
 
 export default function Home() {
+  const [, setLocation] = useLocation();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -219,6 +221,14 @@ What would you like to explore? You can select a country pair from the matrix, o
               <span className="hidden sm:inline">DEMO DATA</span>
             </span>
           )}
+          <button
+            onClick={() => setLocation("/glossary")}
+            className="text-muted-foreground hover:text-cyan-400 transition-colors p-1 flex items-center gap-1"
+            title="Open Glossary"
+          >
+            <BookOpen size={13} />
+            <span className="hidden lg:inline text-xs font-mono">GLOSSARY</span>
+          </button>
           <button
             onClick={refresh}
             className="text-muted-foreground hover:text-amber-400 transition-colors p-1"

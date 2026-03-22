@@ -120,6 +120,9 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
   israel:  "IL",
   canada:  "CA",
   europe:  "EU",
+  iran:    "IR",
+  india:   "IN",
+  gcc:     "GCC",
 };
 
 // Reverse map: uppercase ISO codes → WRDI internal profile keys
@@ -131,6 +134,9 @@ const UPPERCASE_TO_PROFILE_KEY: Record<string, string> = {
   IL:  "israel",
   CA:  "canada",
   EU:  "europe",
+  IR:  "iran",
+  IN:  "india",
+  GCC: "gcc",
 };
 
 function getMarketValue(marketData: MarketData[], country: string, type: string): number | null {
@@ -263,6 +269,51 @@ const COUNTRY_PROFILES: Record<string, CountryProfile> = {
       { date: "2026-03-20", category: "economic", description: "CAD weakens on US tariff threats to Canadian auto sector", impactScore: 6, source: "Bloomberg", classification: "negative" },
       { date: "2026-03-18", category: "political", description: "Canada announces increased Arctic sovereignty patrols", impactScore: 5, source: "BBC", classification: "neutral" },
       { date: "2026-03-15", category: "social", description: "Immigration policy revision reduces intake targets by 20%", impactScore: 5, source: "Reuters", classification: "neutral" },
+    ]
+  },
+  iran: {
+    name: "Iran",
+    politicalBase: 8.0,
+    militaryBase: 7.5,
+    economicBase: 8.5,
+    socialBase: 7.0,
+    indexSymbol: "iran",
+    currencySymbol: "iran",
+    commodityExposure: "oil",
+    recentEvents: [
+      { date: "2026-03-22", category: "military", description: "IRGC missile drill in Persian Gulf amid nuclear talks stalemate", impactScore: 8, source: "IISS", classification: "negative" },
+      { date: "2026-03-20", category: "political", description: "Iran rejects US preconditions for new JCPOA negotiations", impactScore: 7, source: "Reuters", classification: "negative" },
+      { date: "2026-03-17", category: "economic", description: "Iran oil exports reach 1.8M bbl/day despite sanctions via China/India", impactScore: 5, source: "Bloomberg", classification: "neutral" },
+    ]
+  },
+  india: {
+    name: "India",
+    politicalBase: 5.0,
+    militaryBase: 5.5,
+    economicBase: 4.5,
+    socialBase: 5.0,
+    indexSymbol: "india",
+    currencySymbol: "india",
+    commodityExposure: "oil",
+    recentEvents: [
+      { date: "2026-03-21", category: "political", description: "India abstains on UN resolution condemning Russian operations in Ukraine", impactScore: 5, source: "UN", classification: "neutral" },
+      { date: "2026-03-19", category: "economic", description: "Nifty 50 recovers as FII inflows resume on rate cut expectations", impactScore: 5, source: "Bloomberg", classification: "positive" },
+      { date: "2026-03-16", category: "military", description: "India-US Predator drone deal finalized; $3.5B procurement approved", impactScore: 6, source: "Reuters", classification: "positive" },
+    ]
+  },
+  gcc: {
+    name: "Gulf States (GCC)",
+    politicalBase: 5.5,
+    militaryBase: 5.5,
+    economicBase: 5.0,
+    socialBase: 4.5,
+    indexSymbol: "gcc",
+    currencySymbol: "gcc",
+    commodityExposure: "oil",
+    recentEvents: [
+      { date: "2026-03-22", category: "military", description: "Saudi Arabia intercepts Houthi ballistic missile targeting Riyadh", impactScore: 8, source: "Reuters", classification: "negative" },
+      { date: "2026-03-20", category: "economic", description: "OPEC+ maintains production cuts; Brent holds above $75/bbl", impactScore: 6, source: "Bloomberg", classification: "neutral" },
+      { date: "2026-03-18", category: "political", description: "UAE-Israel trade delegation signs $2B tech investment package", impactScore: 5, source: "AFP", classification: "positive" },
     ]
   },
   europe: {
