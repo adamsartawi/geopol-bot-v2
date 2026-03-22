@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { nanoid } from "nanoid";
 import { Streamdown } from "streamdown";
-import { ChatMessage, streamChatResponse, generatePairBrief, detectPairFromQuestion } from "@/lib/chatEngine";
+import { ChatMessage, streamChatResponse, generatePairBrief, detectPairFromQuestion, LiveKBData } from "@/lib/chatEngine";
 import { COUNTRIES, COUNTRY_PAIRS, MIDDLE_EAST_SCENARIOS, SUGGESTED_QUESTIONS } from "@/lib/geopoliticalData";
 import { useMarketData } from "@/hooks/useMarketData";
 import CountrySidebar from "@/components/CountrySidebar";
@@ -21,7 +21,8 @@ import PipelinePanel from "@/components/PipelinePanel";
 import { MiddleEastScenario } from "@/lib/geopoliticalData";
 import {
   Send, RefreshCw, AlertTriangle, Zap, Globe,
-  ChevronRight, MessageSquare, Map, BarChart2, Activity, Cpu
+  ChevronRight, MessageSquare, Map, BarChart2, Activity, Cpu,
+  SearchCheck
 } from "lucide-react";
 
 export default function Home() {
@@ -32,6 +33,7 @@ export default function Home() {
   const [activeRightPanel, setActiveRightPanel] = useState<"wrdi" | "matrix" | "market" | "scenarios" | "pipeline">("wrdi");
   const [mobileTab, setMobileTab] = useState<"chat" | "countries" | "matrix" | "wrdi" | "market">("chat");
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
+  const [factCheckStatus, setFactCheckStatus] = useState<{ text: string; type: "ok" | "warn" | "info" } | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -89,14 +91,72 @@ What would you like to explore? You can select a country pair from the matrix, o
       if (detectedPair) setSelectedPair(detectedPair.id);
 
       const allMessages = [...messages, userMsg];
-      let fullContent = "";
 
+      // ── Kick off fact-check in parallel (non-blocking) ──
+      const factCheckPromise = fetch("/api/geopol/factcheck", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      }).then(r => r.json()).catch(() => null);
+
+      // ── First pass: stream with static KB ──
+      let firstPassContent = "";
       for await (const chunk of streamChatResponse(allMessages, marketData)) {
-        fullContent += chunk;
+        firstPassContent += chunk;
         setMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content: fullContent } : m)
+          prev.map(m => m.id === assistantId ? { ...m, content: firstPassContent } : m)
         );
       }
+
+      // ── Await fact-check result ──
+      const fcResult = await factCheckPromise;
+
+      if (fcResult?.status === "kb_updated" && fcResult.kbUpdatesApplied > 0) {
+        const fieldsUpdated = fcResult.kbUpdatesApplied;
+        setFactCheckStatus({ text: `Verified ✓ — KB updated (${fieldsUpdated} field${fieldsUpdated !== 1 ? "s" : ""})`, type: "ok" });
+
+        // Fetch fresh KB snapshot
+        let liveKB: LiveKBData | undefined;
+        try {
+          const kbRes = await fetch("/api/geopol/kb-snapshot");
+          if (kbRes.ok) liveKB = await kbRes.json();
+        } catch { /* use static KB */ }
+
+        // Append verification notice
+        const verifyNote = `\n\n---\n*⚠️ Claim verified by external sources (${Math.round(fcResult.confidence * 100)}% confidence). Knowledge base updated with ${fieldsUpdated} new data point${fieldsUpdated !== 1 ? "s" : ""}. Re-analyzing with updated data...*`;
+        setMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content: firstPassContent + verifyNote } : m)
+        );
+        await new Promise(r => setTimeout(r, 600));
+
+        // Re-stream with updated KB
+        const reMessages = [
+          ...allMessages,
+          { id: nanoid(), role: "assistant" as const, content: firstPassContent, timestamp: new Date() },
+          { id: nanoid(), role: "user" as const, content: "Re-answer my previous question using the newly updated knowledge base.", timestamp: new Date() },
+        ];
+        let reContent = firstPassContent + verifyNote + "\n\n**Updated analysis:**\n";
+        for await (const chunk of streamChatResponse(reMessages, marketData, liveKB)) {
+          reContent += chunk;
+          setMessages(prev =>
+            prev.map(m => m.id === assistantId ? { ...m, content: reContent } : m)
+          );
+        }
+        setTimeout(() => setFactCheckStatus(null), 6000);
+
+      } else if (fcResult?.status === "contradicted") {
+        setFactCheckStatus({ text: `Claim contradicted by sources`, type: "warn" });
+        const warnNote = `\n\n---\n*⚠️ External sources contradict this claim. ${fcResult.summary}*`;
+        setMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content: firstPassContent + warnNote } : m)
+        );
+        setTimeout(() => setFactCheckStatus(null), 6000);
+
+      } else if (fcResult?.status === "verified") {
+        setFactCheckStatus({ text: `Verified ✓ (no KB update needed)`, type: "info" });
+        setTimeout(() => setFactCheckStatus(null), 4000);
+      }
+
     } catch {
       setMessages(prev =>
         prev.map(m =>
@@ -136,6 +196,15 @@ What would you like to explore? You can select a country pair from the matrix, o
           </span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {factCheckStatus && (
+            <span className={`font-mono text-xs flex items-center gap-1 animate-in fade-in duration-300 ${
+              factCheckStatus.type === "ok" ? "text-emerald-400" :
+              factCheckStatus.type === "warn" ? "text-red-400" : "text-cyan-400"
+            }`}>
+              <SearchCheck size={10} />
+              <span className="hidden sm:inline">{factCheckStatus.text}</span>
+            </span>
+          )}
           {usingMockData && (
             <span className="font-mono text-xs text-amber-400 flex items-center gap-1">
               <AlertTriangle size={10} />

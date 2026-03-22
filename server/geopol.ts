@@ -1,15 +1,17 @@
 // ============================================================
 // GEOPOLITICAL INTELLIGENCE ENGINE — Server Routes
-// Handles: LLM streaming chat, market data proxy
+// Handles: LLM streaming chat, market data proxy, fact-check
 // ============================================================
 
 import { Router, Request, Response } from "express";
 import { ENV } from "./_core/env";
+import { factCheckUserClaim } from "./factcheck";
+import { getDb } from "./db";
+import { countryProfiles, countryPairs, middleEastScenarios } from "../drizzle/schema";
 
 export const geopolRouter = Router();
 
 // ── Market Data Proxy ──────────────────────────────────────
-// Fetches Yahoo Finance data server-side to avoid CORS issues
 geopolRouter.get("/api/market-data", async (req: Request, res: Response) => {
   const { symbol } = req.query as { symbol?: string };
   if (!symbol) {
@@ -37,6 +39,45 @@ geopolRouter.get("/api/market-data", async (req: Request, res: Response) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "fetch error";
     res.status(500).json({ error: message });
+  }
+});
+
+// ── Fact-Check Endpoint ────────────────────────────────────
+// Verifies a user claim against external sources and updates KB
+geopolRouter.post("/api/geopol/factcheck", async (req: Request, res: Response) => {
+  const { message } = req.body as { message?: string };
+  if (!message) {
+    res.status(400).json({ error: "message required" });
+    return;
+  }
+  try {
+    const result = await factCheckUserClaim(message);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Fact-check error";
+    console.error("[FactCheck] Error:", msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ── KB Snapshot Endpoint ───────────────────────────────────
+// Returns live DB state for building the system prompt with fresh data
+geopolRouter.get("/api/geopol/kb-snapshot", async (_req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      res.json({ countries: [], pairs: [], scenarios: [] });
+      return;
+    }
+    const [countries, pairs, scenarios] = await Promise.all([
+      db.select().from(countryProfiles),
+      db.select().from(countryPairs),
+      db.select().from(middleEastScenarios),
+    ]);
+    res.json({ countries, pairs, scenarios });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "KB snapshot error";
+    res.status(500).json({ error: msg });
   }
 });
 

@@ -31,9 +31,54 @@ export interface ChatMessage {
   analysisType?: "country-pair" | "scenario" | "market" | "general";
   relatedPair?: string;
 }
+// ── Live KB data from DB (optional, overrides static data when available) ───
+export interface LiveKBData {
+  countries: Array<{
+    countryId: string;
+    name: string;
+    economicPillars: string[];
+    keyIndicators: string[];
+    vulnerabilities: string[];
+    strategicAssets: string[];
+    currentPressures: string[];
+    middleEastInterests: string[];
+    geopoliticalPosture: string;
+  }>;
+  pairs: Array<{
+    pairId: string;
+    country1: string;
+    country2: string;
+    relationshipType: string;
+    tensionScore: number;
+    cooperationScore: number;
+    middleEastImpactScore: number;
+    economicInterdependency: string;
+    tensionPoints: string[];
+    cooperationAreas: string[];
+    middleEastDimension: string;
+    politicalAnticipation: string[];
+    treatyViability: string;
+    winnerAssessment: string;
+    leverageHolder: string;
+    leverageReason: string;
+    dangerousScenario: string;
+    remainingOptions: string[];
+  }>;
+  scenarios: Array<{
+    scenarioId: string;
+    title: string;
+    riskLevel: string;
+    probability: string;
+    trigger: string;
+    economicImpact: string;
+    politicalImpact: string;
+    marketSignals: string[];
+    affectedCountries: string[];
+    timeframe: string;
+  }>;
+}
 
-// ── Full data serialization helpers ─────────────────────────────────────────
-
+// ── Full data serialization helpers ───────────────────────────────────────────
 function serializeCountryProfile(c: CountryProfile): string {
   return [
     `=== ${c.name.toUpperCase()} ===`,
@@ -98,17 +143,59 @@ function serializeLiveMarket(marketData: MarketData[]): string {
       return `${d.name}: ${d.price?.toFixed(2)}${pct}`;
     }).join(", ");
     return `${countryName}: ${vals}`;
-  }).join("\n");
+  }).join('\n');
 }
 
-// ── System prompt — full data injection, strict grounding ───────────────────
+// ── System prompt — full data injection, strict grounding ───────────────────────────────────────────
 
-function buildSystemPrompt(marketData: MarketData[]): string {
-  const allCountryProfiles = COUNTRIES.map(serializeCountryProfile).join("\n\n");
-  const allPairs = COUNTRY_PAIRS.map(serializeCountryPair).join("\n\n");
-  const allScenarios = MIDDLE_EAST_SCENARIOS.map(serializeScenario).join("\n\n");
+function buildSystemPrompt(marketData: MarketData[], liveKB?: LiveKBData): string {
+  let allCountryProfiles: string;
+  let allPairs: string;
+  let allScenarios: string;
+
+  // Use live DB data if available (post fact-check), otherwise fall back to static data
+  if (liveKB && liveKB.countries.length > 0) {
+    allCountryProfiles = liveKB.countries.map(c => [
+      `=== ${c.name.toUpperCase()} ===`,
+      `Economic Pillars: ${(c.economicPillars ?? []).join(" | ")}`,
+      `Key Indicators: ${(c.keyIndicators ?? []).join(" | ")}`,
+      `Vulnerabilities: ${(c.vulnerabilities ?? []).join(" | ")}`,
+      `Strategic Assets: ${(c.strategicAssets ?? []).join(" | ")}`,
+      `Current Pressures: ${(c.currentPressures ?? []).join(" | ")}`,
+      `Geopolitical Posture: ${c.geopoliticalPosture}`,
+      `Middle East Interests: ${(c.middleEastInterests ?? []).join(" | ")}`,
+    ].join("\n")).join("\n\n");
+    allPairs = liveKB.pairs.map(p => [
+      `=== ${p.country1} / ${p.country2} [${p.pairId}] ===`,
+      `Relationship Type: ${p.relationshipType}`,
+      `Tension Score: ${p.tensionScore}/100 | Cooperation Score: ${p.cooperationScore}/100 | Middle East Impact: ${p.middleEastImpactScore}/100`,
+      `Economic Interdependency: ${p.economicInterdependency}`,
+      `Tension Points: ${(p.tensionPoints ?? []).join(" | ")}`,
+      `Cooperation Areas: ${(p.cooperationAreas ?? []).join(" | ")}`,
+      `Middle East Dimension: ${p.middleEastDimension}`,
+      `Political Anticipation: ${(p.politicalAnticipation ?? []).join(" | ")}`,
+      `Treaty Viability: ${p.treatyViability}`,
+      `Winner Assessment: ${p.winnerAssessment}`,
+      `Leverage Holder: ${p.leverageHolder} — ${p.leverageReason}`,
+      `Dangerous Scenario: ${p.dangerousScenario}`,
+      `Remaining Options: ${(p.remainingOptions ?? []).join(" | ")}`,
+    ].join("\n")).join("\n\n");
+    allScenarios = liveKB.scenarios.map(s => [
+      `=== SCENARIO: ${s.title} [${s.riskLevel} risk | ${s.probability} probability] ===`,
+      `Trigger: ${s.trigger}`,
+      `Timeframe: ${s.timeframe}`,
+      `Economic Impact: ${s.economicImpact}`,
+      `Political Impact: ${s.politicalImpact}`,
+      `Market Signals to Watch: ${(s.marketSignals ?? []).join(" | ")}`,
+      `Affected Countries: ${(s.affectedCountries ?? []).join(", ")}`,
+    ].join("\n")).join("\n\n");
+  } else {
+    allCountryProfiles = COUNTRIES.map(serializeCountryProfile).join("\n\n");
+    allPairs = COUNTRY_PAIRS.map(serializeCountryPair).join("\n\n");
+    allScenarios = MIDDLE_EAST_SCENARIOS.map(serializeScenario).join("\n\n");
+  }
+
   const liveMarket = serializeLiveMarket(marketData);
-
   return `You are GEOPOL-INT, a geopolitical intelligence analyst. Your ONLY source of information is the structured knowledge base provided below. You must NOT use any general world knowledge, news, or training data beyond what is explicitly provided here.
 
 STRICT RULES — YOU MUST FOLLOW THESE:
@@ -159,9 +246,10 @@ REMINDER: Answer ONLY from the data above. If it is not in the knowledge base, s
 
 export async function* streamChatResponse(
   messages: ChatMessage[],
-  marketData: MarketData[]
+  marketData: MarketData[],
+  liveKB?: LiveKBData
 ): AsyncGenerator<string> {
-  const systemPrompt = buildSystemPrompt(marketData);
+  const systemPrompt = buildSystemPrompt(marketData, liveKB);
 
   const apiMessages = [
     { role: "system", content: systemPrompt },

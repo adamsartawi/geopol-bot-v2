@@ -113,3 +113,13 @@
 - [x] Fix generateDangerousScenario using hardcoded lowercase IDs for comparison — updated to normalize IDs before comparison
 - [x] Fix EU currency lookup (EUR/USD stored as GLOBAL not EU) — added special case in getMarketValue
 - [x] Add 8 new unit tests for country ID normalization (47 tests total, all passing)
+
+## Feature: User Claim Fact-Check & KB Update
+- [x] Build factcheck.ts engine: claim extraction → GDELT search → LLM verification → KB update
+- [x] Add /api/geopol/factcheck endpoint to geopol.ts
+- [x] Add /api/geopol/kb-snapshot endpoint to geopol.ts
+- [x] Update chatEngine.ts to accept LiveKBData and re-stream with updated KB
+- [x] Update Home.tsx sendMessage: call factcheck in parallel, show status indicator, re-stream on KB update
+- [x] Add factCheckStatus UI indicator in chat header (green=verified, red=contradicted, cyan=info)
+- [x] Write 10 unit tests for fact-check engine (56 total, all passing)
+- [x] Add top-level try-catch in factCheckUserClaim for graceful error handling
