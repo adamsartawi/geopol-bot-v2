@@ -130,3 +130,9 @@
 - [x] Stream only starts after factcheck completes; passes updated KB snapshot if KB was updated
 - [x] Contradicted claims: prepend warning note before the answer
 - [x] KB-updated claims: append verification note at the end of the answer
+
+## Feature: Web Search Fallback
+- [x] Fix GDELT query URL bug: encodeURIComponent was converting spaces to %20, breaking the GDELT parser. Fixed to use plain + separator
+- [x] Update system prompt: removed hard "refuse if outside KB" rule. Bot now analyzes using country profiles and relationship data for events not in KB
+- [x] Update system prompt: NEVER say "outside my data coverage" — always provide best analysis using available context
+- [x] Update REMINDER: use KB as primary source, not exclusive source

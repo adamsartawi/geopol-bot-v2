@@ -118,12 +118,17 @@ interface GDELTArticle {
 
 async function searchGDELT(keywords: string[], countries: string[]): Promise<GDELTArticle[]> {
   try {
-    // Build a targeted GDELT query from keywords
-    const keywordQuery = keywords.slice(0, 4).map(k => encodeURIComponent(k)).join("+");
+    // Build a targeted GDELT query from keywords.
+    // IMPORTANT: do NOT use encodeURIComponent — GDELT expects plain words joined by +.
+    // encodeURIComponent converts spaces to %20 which breaks the GDELT query parser.
+    const keywordQuery = keywords.slice(0, 5)
+      .map(k => k.trim().replace(/\s+/g, "+")) // spaces within a keyword → +
+      .join("+");                                // keywords joined by +
     const countryPart = countries.length > 0
       ? `+country:${countries.slice(0, 3).join("+OR+country:")}`
       : "";
     const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${keywordQuery}${countryPart}&mode=artlist&maxrecords=10&format=json&timespan=10080`; // last 7 days
+    console.log(`[FactCheck] GDELT query: ${url.split('?')[1]?.slice(0,120)}`);
     const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
     if (!res.ok) return [];
     const data = await res.json() as any;
