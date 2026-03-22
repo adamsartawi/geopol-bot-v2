@@ -58,32 +58,79 @@ async function fetchGDELT(): Promise<RawEvent[]> {
 }
 
 /**
- * ACLED — Armed Conflict Location & Event Data (free with registration)
- * Uses public endpoint for recent global conflict events.
+ * ACLED — Armed Conflict Location & Event Data
+ * Uses OAuth2 password grant (email + password) to get a bearer token,
+ * then fetches the last 6 hours of conflict events globally.
+ * Mirrors the official Python example provided by the ACLED team.
  */
 async function fetchACLED(): Promise<RawEvent[]> {
   const events: RawEvent[] = [];
+  const { acledEmail, acledPassword } = await import("./_core/env").then(m => m.ENV ? { acledEmail: m.ENV.acledEmail, acledPassword: m.ENV.acledPassword } : { acledEmail: process.env.ACLED_EMAIL ?? "", acledPassword: process.env.ACLED_PASSWORD ?? "" });
+
+  if (!acledEmail || !acledPassword) {
+    console.warn("[Pipeline] ACLED credentials not configured — skipping");
+    return events;
+  }
+
   try {
-    // ACLED public API — recent events in Middle East + relevant countries
-    const regions = "Middle East,Eastern Europe,Asia"; // ACLED region names
-    const url = `https://api.acleddata.com/acled/read?key=&email=&region=${encodeURIComponent(regions)}&limit=20&fields=event_date|event_type|actor1|actor2|country|location|fatalities|notes|source&format=json`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (res.ok) {
-      const data = await res.json() as any;
-      const acledEvents = data?.data ?? [];
-      for (const e of acledEvents.slice(0, 15)) {
-        events.push({
-          source: "ACLED",
-          sourceUrl: `https://acleddata.com/data-export-tool/`,
-          title: `${e.event_type}: ${e.actor1} in ${e.country}`,
-          summary: e.notes ?? `${e.event_type} involving ${e.actor1}${e.actor2 ? ` and ${e.actor2}` : ""} in ${e.location}, ${e.country}. Fatalities: ${e.fatalities ?? 0}.`,
-          eventDate: e.event_date ? new Date(e.event_date) : new Date(),
-          rawData: e,
-        });
+    // Step A: Request OAuth2 access token
+    const authBody = new URLSearchParams({
+      username: acledEmail,
+      password: acledPassword,
+      grant_type: "password",
+      client_id: "acled",
+    });
+    const authRes = await fetch("https://acleddata.com/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: authBody.toString(),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!authRes.ok) throw new Error(`ACLED auth failed: HTTP ${authRes.status}`);
+    const authData = await authRes.json() as any;
+    const accessToken = authData?.access_token;
+    if (!accessToken) throw new Error("ACLED auth returned no access_token");
+    console.log("[Pipeline] ACLED authenticated successfully");
+
+    // Step B: Define 6-hour rolling window (use date only as ACLED accepts YYYY-MM-DD)
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const eventDateStr = sixHoursAgo.toISOString().split("T")[0]; // YYYY-MM-DD
+
+    // Step C: Fetch armed conflict events
+    const params = new URLSearchParams({
+      event_date: eventDateStr,
+      event_date_where: ">=",
+      limit: "100",
+      _format: "json",
+    });
+    const dataRes = await fetch(
+      `https://acleddata.com/api/acled/read?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        signal: AbortSignal.timeout(20000),
       }
+    );
+    if (!dataRes.ok) throw new Error(`ACLED data fetch failed: HTTP ${dataRes.status}`);
+    const data = await dataRes.json() as any;
+    const acledEvents: any[] = data?.data ?? [];
+    console.log(`[Pipeline] ACLED returned ${acledEvents.length} events since ${eventDateStr}`);
+
+    for (const e of acledEvents.slice(0, 50)) {
+      events.push({
+        source: "ACLED",
+        sourceUrl: `https://acleddata.com/data-export-tool/`,
+        title: `${e.event_type ?? "Event"}: ${e.actor1 ?? "Unknown actor"} in ${e.country ?? "Unknown country"}`,
+        summary: e.notes
+          ?? `${e.event_type} involving ${e.actor1}${e.actor2 ? ` and ${e.actor2}` : ""} in ${e.location ?? ""}, ${e.country ?? ""}. Fatalities: ${e.fatalities ?? 0}.`,
+        eventDate: e.event_date ? new Date(e.event_date) : new Date(),
+        rawData: e,
+      });
     }
   } catch (e) {
-    console.warn("[Pipeline] ACLED fetch failed (may need API key):", (e as Error).message);
+    console.warn("[Pipeline] ACLED fetch failed:", (e as Error).message);
   }
   return events;
 }

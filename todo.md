@@ -100,3 +100,10 @@
 - [x] Fix SCORES tab showing no data (WRDI scores not computing — market data not reaching component)
 - [x] Fix PAIRS tab showing no data (same root cause)
 - [x] Fix REPORT tab stuck on "Market data is still loading" even after data loads
+
+## ACLED Live Integration
+- [x] Store ACLED credentials as secure environment secrets (ACLED_EMAIL, ACLED_PASSWORD)
+- [x] Implement OAuth2 token fetch in pipeline (POST to acleddata.com/oauth/token)
+- [x] Implement ACLED data fetch with 6-hour rolling window and 100-event limit
+- [x] Wire ACLED events into LLM classification for Military dimension scoring
+- [x] Test ACLED connection end-to-end
