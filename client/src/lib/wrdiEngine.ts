@@ -556,7 +556,7 @@ function generateAnticipatedMoves(
   }
 
   if (avgPolitical > 7) {
-    moves.push(`Diplomatic channels strained — expect UN forum confrontations and proxy positioning`);
+    moves.push(`Diplomatic channels strained — expect UN forum confrontations and positioning through aligned regional actors`);
   } else if (avgPolitical < 5) {
     moves.push(`Diplomatic window open — bilateral talks or treaty renegotiation likely within 6 months`);
   }
@@ -590,7 +590,7 @@ function generateDangerousScenario(
   }
   if (n1 === "israel" || n2 === "israel") {
     return maxMilitary > 7
-      ? "Multi-front conflict activation (Gaza + Lebanon + Iran proxy) overwhelming regional containment capacity"
+      ? "Multi-front conflict activation (Gaza + Lebanon + Iran-aligned factions) overwhelming regional containment capacity"
       : "Normalization deal collapse triggers regional realignment, drawing in external powers";
   }
   if (maxMilitary > 8) {

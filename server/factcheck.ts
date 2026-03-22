@@ -79,8 +79,15 @@ async function extractClaim(userMessage: string): Promise<ExtractedClaim> {
         role: "system",
         content: `You extract factual claims about real-world geopolitical events from user messages.
 A "claim" is a specific, verifiable statement about something that happened or is happening in the real world.
-Examples of claims: "Trump warned about an attack on Iran's grid in 48 hours", "Russia deployed troops to Belarus border", "Israel struck a Hezbollah target in Syria".
+Examples of claims: "Trump warned about an attack on Iran's grid in 48 hours", "Russia deployed troops to Belarus border", "Israel struck a Hezbollah target in Syria", "Strait of Hormuz was closed", "Houthi forces attacked a ship".
 NOT claims: general questions, hypotheticals, requests for analysis, opinions.
+
+For keywords, use SPECIFIC terms that would appear in news headlines:
+- Use proper place names: "Hormuz" not "strait", "Gaza" not "conflict zone", "Beirut" not "Lebanon capital"
+- Use actor names: "Houthi" not "Yemen forces", "Hezbollah" not "Lebanese group", "IRGC" not "Iranian military"
+- Use action verbs: "closed", "attacked", "deployed", "warned", "sanctioned"
+- Include the key person or country: "Trump", "Netanyahu", "Iran", "Israel"
+Generate 4-6 keywords that would match actual news article headlines.
 Respond with JSON only.`,
       },
       {
@@ -116,7 +123,6 @@ Respond with JSON only.`,
 }
 
 // ── Step 2: Search GDELT for corroborating evidence ──────────────────────────
-
 interface GDELTArticle {
   title: string;
   url: string;
@@ -124,29 +130,64 @@ interface GDELTArticle {
   seendate: string;
 }
 
-async function searchGDELT(keywords: string[], countries: string[]): Promise<GDELTArticle[]> {
+/**
+ * Build a GDELT doc API URL.
+ * IMPORTANT: do NOT use encodeURIComponent — GDELT expects plain words joined by +.
+ * Country filters must be space-separated in quotes or omitted entirely to avoid
+ * breaking the query parser when combined with keyword terms.
+ */
+function buildGDELTUrl(keywords: string[], timespanMinutes: number, maxRecords = 10): string {
+  const keywordQuery = keywords
+    .slice(0, 6)
+    .map(k => k.trim().replace(/\s+/g, "+"))
+    .join("+");
+  return `https://api.gdeltproject.org/api/v2/doc/doc?query=${keywordQuery}&mode=artlist&maxrecords=${maxRecords}&format=json&timespan=${timespanMinutes}`;
+}
+
+async function fetchGDELTUrl(url: string): Promise<GDELTArticle[]> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!res.ok) return [];
+  const data = await res.json() as any;
+  return (data?.articles ?? []) as GDELTArticle[];
+}
+
+async function searchGDELT(keywords: string[], _countries: string[]): Promise<GDELTArticle[]> {
   try {
-    // Build a targeted GDELT query from keywords.
-    // IMPORTANT: do NOT use encodeURIComponent — GDELT expects plain words joined by +.
-    // encodeURIComponent converts spaces to %20 which breaks the GDELT query parser.
-    const keywordQuery = keywords.slice(0, 5)
-      .map(k => k.trim().replace(/\s+/g, "+")) // spaces within a keyword → +
-      .join("+");                                // keywords joined by +
-    const countryPart = countries.length > 0
-      ? `+country:${countries.slice(0, 3).join("+OR+country:")}`
-      : "";
-    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${keywordQuery}${countryPart}&mode=artlist&maxrecords=10&format=json&timespan=10080`; // last 7 days
-    console.log(`[FactCheck] GDELT query: ${url.split('?')[1]?.slice(0,120)}`);
-    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return [];
-    const data = await res.json() as any;
-    return (data?.articles ?? []).slice(0, 8) as GDELTArticle[];
+    // Tiered search: try progressively wider time windows
+    // 1st pass: last 24 hours (1440 min) — catches breaking news
+    const url24h = buildGDELTUrl(keywords, 1440);
+    console.log(`[FactCheck] GDELT 24h query: ${url24h.split('?')[1]?.slice(0, 120)}`);
+    let articles = await fetchGDELTUrl(url24h);
+
+    // 2nd pass: last 7 days (10080 min) if 24h returned nothing
+    if (articles.length === 0) {
+      const url7d = buildGDELTUrl(keywords, 10080);
+      console.log(`[FactCheck] GDELT 7d query: ${url7d.split('?')[1]?.slice(0, 120)}`);
+      articles = await fetchGDELTUrl(url7d);
+    }
+
+    // 3rd pass: last 30 days (43200 min) if 7d returned nothing
+    if (articles.length === 0) {
+      const url30d = buildGDELTUrl(keywords, 43200);
+      console.log(`[FactCheck] GDELT 30d query: ${url30d.split('?')[1]?.slice(0, 120)}`);
+      articles = await fetchGDELTUrl(url30d);
+    }
+
+    // 4th pass: fallback with only the 2 most important keywords (broader match)
+    if (articles.length === 0 && keywords.length > 2) {
+      const fallbackKeywords = keywords.slice(0, 2);
+      const urlFallback = buildGDELTUrl(fallbackKeywords, 43200, 15);
+      console.log(`[FactCheck] GDELT fallback query: ${urlFallback.split('?')[1]?.slice(0, 120)}`);
+      articles = await fetchGDELTUrl(urlFallback);
+    }
+
+    console.log(`[FactCheck] GDELT total articles found: ${articles.length}`);
+    return articles.slice(0, 10);
   } catch (e) {
-    console.warn("[FactCheck] GDELT search failed:", (e as Error).message);
+     console.warn("[FactCheck] GDELT search failed:", (e as Error).message);
     return [];
   }
 }
-
 // ── Step 3: Verify the claim against search results ──────────────────────────
 
 interface VerificationResult {

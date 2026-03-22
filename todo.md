@@ -147,3 +147,16 @@
 - [x] sendMessage extracts liveNewsContext from factcheck result and passes to streamChatResponse
 - [x] Status indicator shows article count when news found but unverified
 - [x] 56 tests passing
+
+## Upgrade: GDELT Search Coverage
+- [x] Tiered time windows: try 24h first, then 48h, then 7 days
+- [x] Fixed country filter syntax in GDELT URL (encodeURIComponent was breaking query)
+- [x] Improved extractClaim keyword generation for geographic specifics (Strait of Hormuz, Houthi, etc.)
+- [x] Added fallback query without country filter when primary returns 0 results
+
+## Upgrade: Neutral Language — Remove Biased Terminology
+- [x] Replaced "Iranian proxy network" with "Iran-aligned armed faction capabilities" in geopoliticalData.ts
+- [x] Replaced "proxy positioning" and "Iran proxy" in wrdiEngine.ts
+- [x] Replaced "proxy conflicts" and "Proxy conflict involvement" in WRDIPanel.tsx
+- [x] Added NEUTRAL LANGUAGE rule 6 to system prompt in chatEngine.ts (applies to all languages including Arabic)
+- [x] 56 tests passing, 0 TypeScript errors

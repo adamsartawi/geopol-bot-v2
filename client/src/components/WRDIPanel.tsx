@@ -72,8 +72,8 @@ const METRIC_DEFINITIONS: Record<string, { name: string; definition: string; for
   },
   middleEastImpact: {
     name: "Middle East Impact Score",
-    definition: "Measures how strongly a bilateral relationship between two major powers affects Middle East stability. High scores indicate that decisions made in this relationship directly determine outcomes in the region — through proxy conflicts, energy policy, arms supplies, or diplomatic pressure on regional actors.",
-    formula: "Energy dependency × 0.3 + Proxy conflict involvement × 0.3 + Arms supply chains × 0.2 + Diplomatic leverage × 0.2",
+    definition: "Measures how strongly a bilateral relationship between two major powers affects Middle East stability. High scores indicate that decisions made in this relationship directly determine outcomes in the region — through indirect conflicts involving aligned regional actors, energy policy, arms supplies, or diplomatic pressure on regional actors.",
+    formula: "Energy dependency × 0.3 + Indirect conflict involvement through aligned regional actors × 0.3 + Arms supply chains × 0.2 + Diplomatic leverage × 0.2",
     sources: "WRDI pair matrices, EIA energy data, SIPRI arms transfers, UN Security Council records",
   },
 };

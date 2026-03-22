@@ -251,7 +251,7 @@ export const COUNTRIES: CountryProfile[] = [
     middleEastInterests: [
       "Preventing Iranian nuclear weapons acquisition — existential priority",
       "Completing Abraham Accords normalization, especially with Saudi Arabia",
-      "Degrading Hamas, Hezbollah, and Iranian proxy network capabilities",
+      "Degrading Hamas, Hezbollah, and Iran-aligned armed faction capabilities",
       "Securing natural gas export routes to Europe via Cyprus and Greece",
       "Maintaining US military and diplomatic support as strategic guarantor",
       "Expanding economic ties with Gulf states (UAE, Bahrain) post-Accords",
