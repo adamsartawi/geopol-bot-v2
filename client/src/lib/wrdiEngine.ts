@@ -547,9 +547,24 @@ export function generateWeeklyReport(
   scores: WRDIScore[],
   marketData: MarketData[]
 ): string {
+  // Guard: if no scores are available yet, return a loading message
+  if (!scores || scores.length === 0) {
+    return "## WRDI Weekly Intelligence Report\n\n*Market data is still loading. Please wait a moment and try again.*";
+  }
+
   const sorted = [...scores].sort((a, b) => b.composite - a.composite);
   const topRisk = sorted[0];
+  const secondRisk = sorted[1];
   const avgComposite = scores.reduce((s, c) => s + c.composite, 0) / scores.length;
+
+  // Guard: topRisk must exist
+  if (!topRisk) {
+    return "## WRDI Weekly Intelligence Report\n\n*Unable to compute risk scores. Please refresh market data and try again.*";
+  }
+
+  const middleEastLine = secondRisk
+    ? `Current composite risk levels suggest **${avgComposite > 7 ? "elevated" : avgComposite > 5 ? "moderate" : "contained"}** spillover risk to the Middle East. The most critical bilateral relationship to watch is **${topRisk.countryName} / ${secondRisk.countryName}** given their combined WRDI differential of ${Math.abs(topRisk.composite - secondRisk.composite).toFixed(1)} points.`
+    : `Current composite risk levels suggest **${avgComposite > 7 ? "elevated" : avgComposite > 5 ? "moderate" : "contained"}** spillover risk to the Middle East. **${topRisk.countryName}** is the highest-risk actor at ${topRisk.composite}/10.`;
 
   const lines = [
     `## WRDI Weekly Intelligence Report`,
@@ -574,7 +589,7 @@ export function generateWeeklyReport(
     ),
     ``,
     `### Middle East Outlook`,
-    `Current composite risk levels suggest **${avgComposite > 7 ? "elevated" : avgComposite > 5 ? "moderate" : "contained"}** spillover risk to the Middle East. The most critical bilateral relationship to watch is **${sorted[0].countryName} / ${sorted[1].countryName}** given their combined WRDI differential of ${Math.abs(sorted[0].composite - sorted[1].composite).toFixed(1)} points.`,
+    middleEastLine,
   ];
 
   return lines.join("\n");

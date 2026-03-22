@@ -67,8 +67,8 @@ geopolRouter.post("/api/geopol/chat", async (req: Request, res: Response) => {
         model: "gemini-2.5-flash",
         messages,
         stream: true,
-        max_tokens: 2000,
-        temperature: 0.7,
+        max_tokens: 800,   // Short conversational replies — data-grounded mode
+        temperature: 0.2,  // Low temperature: factual, deterministic, no hallucination
       }),
       signal: AbortSignal.timeout(60000),
     });

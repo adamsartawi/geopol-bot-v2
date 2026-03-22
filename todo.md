@@ -70,3 +70,11 @@
 - [x] Add WRDI Report side panel with live scored metrics and dimension breakdown
 - [x] Add daily monitoring log view in the WRDI panel (recent events per country)
 - [x] Add weekly report generation from WRDI scores
+
+## Bug Fixes
+- [x] Fix TypeError crash in generateWeeklyReport when scores array is empty (topRisk undefined)
+
+## Chat Engine Constraints
+- [x] Rewrite system prompt so chatbot answers only from structured in-code data (no general LLM knowledge)
+- [x] Inject full country profiles, WRDI scores, pair matrices, market data, and scenarios into every LLM call
+- [x] Add explicit instruction: if data does not cover the question, say so rather than speculate

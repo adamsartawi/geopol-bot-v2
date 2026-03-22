@@ -1,7 +1,8 @@
 // ============================================================
 // GEOPOLITICAL INTELLIGENCE ENGINE — AI Chat Engine
-// Conversational mode: short, focused, dialogue-driven replies
-// WRDI-aware: references the four-dimension risk framework
+// DATA-GROUNDED MODE: All answers must derive exclusively from
+// the structured knowledge base embedded in this codebase.
+// The LLM must NOT use general world knowledge.
 // ============================================================
 
 import {
@@ -31,60 +32,127 @@ export interface ChatMessage {
   relatedPair?: string;
 }
 
-// ── System prompt — conversational, WRDI-aware ───────────────────────────────
+// ── Full data serialization helpers ─────────────────────────────────────────
+
+function serializeCountryProfile(c: CountryProfile): string {
+  return [
+    `=== ${c.name.toUpperCase()} ===`,
+    `Economic Pillars: ${c.economicPillars.join(" | ")}`,
+    `Key Indicators: ${c.keyIndicators.join(" | ")}`,
+    `Vulnerabilities: ${c.vulnerabilities.join(" | ")}`,
+    `Strategic Assets: ${c.strategicAssets.join(" | ")}`,
+    `Current Pressures: ${c.currentPressures.join(" | ")}`,
+    `Geopolitical Posture: ${c.geopoliticalPosture}`,
+    `Middle East Interests: ${c.middleEastInterests.join(" | ")}`,
+  ].join("\n");
+}
+
+function serializeCountryPair(p: CountryPairAnalysis): string {
+  const c1 = COUNTRIES.find(c => c.id === p.country1);
+  const c2 = COUNTRIES.find(c => c.id === p.country2);
+  return [
+    `=== ${c1?.name} / ${c2?.name} [${p.id}] ===`,
+    `Relationship Type: ${p.relationshipType}`,
+    `Tension Score: ${p.tensionScore}/100 | Cooperation Score: ${p.cooperationScore}/100 | Middle East Impact: ${p.middleEastImpactScore}/100`,
+    `Economic Interdependency: ${p.economicInterdependency}`,
+    `Tension Points: ${p.tensionPoints.join(" | ")}`,
+    `Cooperation Areas: ${p.cooperationAreas.join(" | ")}`,
+    `Middle East Dimension: ${p.middleEastDimension}`,
+    `Political Anticipation: ${p.politicalAnticipation.join(" | ")}`,
+    `Treaty Viability: ${p.treatyViability}`,
+    `Winner Assessment: ${p.winnerAssessment}`,
+    `Leverage Holder: ${p.leverageHolder} — ${p.leverageReason}`,
+    `Dangerous Scenario: ${p.dangerousScenario}`,
+    `Remaining Options: ${p.remainingOptions.join(" | ")}`,
+  ].join("\n");
+}
+
+function serializeScenario(s: typeof MIDDLE_EAST_SCENARIOS[0]): string {
+  return [
+    `=== SCENARIO: ${s.title} [${s.riskLevel} risk | ${s.probability} probability] ===`,
+    `Trigger: ${s.trigger}`,
+    `Timeframe: ${s.timeframe}`,
+    `Economic Impact: ${s.economicImpact}`,
+    `Political Impact: ${s.politicalImpact}`,
+    `Market Signals to Watch: ${s.marketSignals.join(" | ")}`,
+    `Affected Countries: ${s.affectedCountries.join(", ")}`,
+  ].join("\n");
+}
+
+function serializeLiveMarket(marketData: MarketData[]): string {
+  const live = marketData.filter(d => d.price !== null);
+  if (live.length === 0) return "Market data loading...";
+
+  const byCountry: Record<string, MarketData[]> = {};
+  for (const d of live) {
+    if (!byCountry[d.country]) byCountry[d.country] = [];
+    byCountry[d.country].push(d);
+  }
+
+  return Object.entries(byCountry).map(([country, items]) => {
+    const countryName = COUNTRIES.find(c => c.id === country)?.name ?? country;
+    const vals = items.map(d => {
+      const pct = d.changePercent !== null
+        ? ` (${d.changePercent > 0 ? "+" : ""}${d.changePercent.toFixed(2)}%)`
+        : "";
+      return `${d.name}: ${d.price?.toFixed(2)}${pct}`;
+    }).join(", ");
+    return `${countryName}: ${vals}`;
+  }).join("\n");
+}
+
+// ── System prompt — full data injection, strict grounding ───────────────────
 
 function buildSystemPrompt(marketData: MarketData[]): string {
-  const countryProfiles = COUNTRIES.map(c =>
-    `${c.name}: pillars=${c.economicPillars.slice(0,2).join(",")}; ME_interests=${c.middleEastInterests.slice(0,2).join(",")}; posture=${c.geopoliticalPosture.substring(0,120)}`
-  ).join("\n");
+  const allCountryProfiles = COUNTRIES.map(serializeCountryProfile).join("\n\n");
+  const allPairs = COUNTRY_PAIRS.map(serializeCountryPair).join("\n\n");
+  const allScenarios = MIDDLE_EAST_SCENARIOS.map(serializeScenario).join("\n\n");
+  const liveMarket = serializeLiveMarket(marketData);
 
-  const pairSummaries = COUNTRY_PAIRS.map(p => {
-    const c1 = COUNTRIES.find(c => c.id === p.country1);
-    const c2 = COUNTRIES.find(c => c.id === p.country2);
-    return `${c1?.name}/${c2?.name}: ${p.relationshipType} | tension=${p.tensionScore} | ME_impact=${p.middleEastImpactScore} | leverage=${p.leverageHolder}`;
-  }).join("\n");
+  return `You are GEOPOL-INT, a geopolitical intelligence analyst. Your ONLY source of information is the structured knowledge base provided below. You must NOT use any general world knowledge, news, or training data beyond what is explicitly provided here.
 
-  const topScenarios = MIDDLE_EAST_SCENARIOS.slice(0, 4).map(s =>
-    `${s.title} [${s.riskLevel}/${s.probability}]: ${s.trigger}`
-  ).join("\n");
+STRICT RULES — YOU MUST FOLLOW THESE:
+1. Every claim, score, assessment, or anticipation you state MUST come directly from the data below. Quote or paraphrase it.
+2. If the user asks about something NOT covered in the data (a country pair not in the matrix, an event not in the scenarios, a country not in the profiles), say: "That's outside my current data coverage. I can only analyze what's in my knowledge base." Do not speculate.
+3. When citing a WRDI score, political anticipation, or dangerous scenario, you are reading it from the data — be explicit: "According to the data..." or "The matrix shows..."
+4. Do NOT invent statistics, dates, events, or relationships that are not in the data below.
+5. If live market data is available, use it to contextualize the data — e.g., "The data identifies oil price as a key signal for Russia, and today WTI is at $X."
 
-  const liveMarket = marketData.filter(d => d.price !== null).slice(0, 12).map(d =>
-    `${d.name}: ${d.price?.toFixed(2)} (${d.changePercent && d.changePercent > 0 ? "+" : ""}${d.changePercent?.toFixed(2)}%)`
-  ).join(" | ");
+CONVERSATION STYLE:
+- Be conversational and direct. Respond like a briefing analyst, not a report writer.
+- Keep replies SHORT: 2–4 sentences for simple questions, one focused paragraph per topic for complex ones.
+- End with ONE short follow-up question to keep the dialogue going.
+- When referencing WRDI scores, cite them naturally: "Russia's military dimension is at 8.5/10..."
+- Never write long bullet lists. Use at most 2–3 bullets only when listing specific named items from the data.
 
-  return `You are GEOPOL-INT, a sharp geopolitical intelligence analyst. You use the WRDI framework — four dimensions: Political/Diplomatic (25%), Military/Security (30%), Economic (25%), Social (20%) — to score risk from 1–10 and anticipate political moves.
-
-CONVERSATION STYLE — CRITICAL:
-- Be conversational and direct. Respond like a knowledgeable analyst in a briefing, not a report writer.
-- Keep replies SHORT: 2–5 sentences for simple questions, 1 short paragraph per topic for complex ones.
-- Never write long bullet lists. Use at most 2–3 bullets only when listing specific items.
-- If the user asks a broad question, answer the most important point and ask a follow-up to go deeper.
-- Use plain language. Replace jargon with clear statements.
-- When referencing WRDI scores, cite them naturally: "Russia's military dimension is at 8.5/10 right now..."
-- Always anchor your answer to live market data when relevant.
-- End with ONE short follow-up question or observation to keep the dialogue going.
-
-WRDI FRAMEWORK (reference when scoring):
-- Political/Diplomatic: statements, UN resolutions, summit activity, alliance posture
-- Military/Security: operations, arms transfers, incidents, readiness level  
-- Economic: equity markets, currency, trade flows, sanctions
-- Social: refugee flows, protests, human rights, demographic pressure
+WRDI FRAMEWORK (for scoring context):
+- Political/Diplomatic (25%) | Military/Security (30%) | Economic (25%) | Social (20%)
 - Composite = (Pol×0.25) + (Mil×0.30) + (Econ×0.25) + (Soc×0.20)
 - Scale: 1–2 Very Low | 3–4 Low | 5–6 Medium | 7–8 High | 9–10 Critical
 
-COUNTRY PROFILES (compact):
-${countryProfiles}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KNOWLEDGE BASE — COUNTRY PROFILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${allCountryProfiles}
 
-BILATERAL MATRIX:
-${pairSummaries}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KNOWLEDGE BASE — BILATERAL RELATIONSHIP MATRIX (10 PAIRS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${allPairs}
 
-TOP MIDDLE EAST SCENARIOS:
-${topScenarios}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KNOWLEDGE BASE — MIDDLE EAST SCENARIOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${allScenarios}
 
-LIVE MARKET DATA (${new Date().toUTCString()}):
-${liveMarket || "Loading..."}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIVE MARKET DATA (as of ${new Date().toUTCString()})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${liveMarket}
 
-Today: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`;
+Today: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REMINDER: Answer ONLY from the data above. If it is not in the knowledge base, say so.`;
 }
 
 // ── Stream response ──────────────────────────────────────────────────────────
@@ -141,7 +209,7 @@ export async function* streamChatResponse(
   }
 }
 
-// ── Pair brief — now conversational opener, not a full report request ────────
+// ── Pair brief — conversational opener referencing actual pair data ───────────
 
 export function generatePairBrief(pairId: string, marketData: MarketData[]): string {
   const pair = COUNTRY_PAIRS.find(p => p.id === pairId);
@@ -151,17 +219,16 @@ export function generatePairBrief(pairId: string, marketData: MarketData[]): str
   const c2 = COUNTRIES.find(c => c.id === pair.country2);
 
   const relevantMarket = marketData.filter(d =>
-    d.country === pair.country1 || d.country === pair.country2
+    (d.country === pair.country1 || d.country === pair.country2) && d.price !== null
   );
 
   const marketNote = relevantMarket.length > 0
-    ? ` Markets: ${relevantMarket.slice(0, 2).map(d =>
-        `${d.name} ${d.changePercent && d.changePercent > 0 ? "+" : ""}${d.changePercent?.toFixed(1)}%`
+    ? ` Live markets: ${relevantMarket.slice(0, 2).map(d =>
+        `${d.name} ${d.changePercent !== null ? (d.changePercent > 0 ? "+" : "") + d.changePercent.toFixed(1) + "%" : "N/A"}`
       ).join(", ")}.`
     : "";
 
-  // Short conversational opener — the LLM will respond briefly and ask what to go deeper on
-  return `Give me a quick read on ${c1?.name} vs ${c2?.name} right now. Relationship: ${pair.relationshipType}, tension ${pair.tensionScore}/100, ME impact ${pair.middleEastImpactScore}/100.${marketNote} What's the most important thing happening between them?`;
+  return `Based on the data, give me a quick read on ${c1?.name} vs ${c2?.name}. The matrix shows tension at ${pair.tensionScore}/100, relationship type: ${pair.relationshipType}, Middle East impact: ${pair.middleEastImpactScore}/100.${marketNote} What's the most important signal right now according to the data?`;
 }
 
 // ── Detect pair from question ────────────────────────────────────────────────
