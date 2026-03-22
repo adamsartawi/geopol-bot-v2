@@ -60,3 +60,13 @@
 - [ ] Add user authentication for saved analysis sessions
 - [ ] Add export functionality (PDF briefing reports)
 - [ ] Add alert system for significant market movements
+
+## WRDI Framework Integration
+- [x] Add WRDI data schema: 4 dimensions (Political 25%, Military 30%, Economic 25%, Social 20%)
+- [x] Build WRDI scoring engine with composite risk score 1-10
+- [x] Add per-country WRDI scores driven by live market data
+- [x] Add per-pair WRDI differential analysis
+- [x] Rebuild chat engine to be conversational (short, focused replies, not long essays)
+- [x] Add WRDI Report side panel with live scored metrics and dimension breakdown
+- [x] Add daily monitoring log view in the WRDI panel (recent events per country)
+- [x] Add weekly report generation from WRDI scores

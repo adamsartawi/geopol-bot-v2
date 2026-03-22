@@ -1,7 +1,7 @@
 // ============================================================
 // GEOPOLITICAL INTELLIGENCE ENGINE — Main Interface
 // Design: Intelligence Terminal / Cold War Cartography
-// Layout: Desktop: Left sidebar + Center chat + Right panel
+// Layout: Desktop: Left sidebar + Center chat + Right WRDI panel
 //         Mobile:  Bottom tab navigation with full-screen views
 // ============================================================
 
@@ -16,42 +16,36 @@ import MarketTicker from "@/components/MarketTicker";
 import RelationshipMatrix from "@/components/RelationshipMatrix";
 import MarketPanel from "@/components/MarketPanel";
 import ScenarioPanel from "@/components/ScenarioPanel";
+import WRDIPanel from "@/components/WRDIPanel";
 import { MiddleEastScenario } from "@/lib/geopoliticalData";
-import { Send, RefreshCw, AlertTriangle, Zap, Globe, ChevronRight, MessageSquare, Map, BarChart2, Menu, X } from "lucide-react";
+import {
+  Send, RefreshCw, AlertTriangle, Zap, Globe,
+  ChevronRight, MessageSquare, Map, BarChart2, Activity
+} from "lucide-react";
 
 export default function Home() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [activePanel, setActivePanel] = useState<"matrix" | "market" | "scenarios">("matrix");
-  // Mobile: "chat" | "countries" | "matrix" | "market" | "scenarios"
-  const [mobileTab, setMobileTab] = useState<"chat" | "countries" | "matrix" | "market" | "scenarios">("chat");
+  const [activeRightPanel, setActiveRightPanel] = useState<"wrdi" | "matrix" | "market" | "scenarios">("wrdi");
+  const [mobileTab, setMobileTab] = useState<"chat" | "countries" | "matrix" | "wrdi" | "market">("chat");
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const { marketData, loading: marketLoading, lastUpdated, usingMockData, refresh } = useMarketData();
 
-  // Welcome message
+  // Welcome message — conversational tone
   useEffect(() => {
     const welcome: ChatMessage = {
       id: nanoid(),
       role: "assistant",
-      content: `## GEOPOL-INT SYSTEM ONLINE
+      content: `**GEOPOL-INT online.** I'm monitoring 6 economies and 10 bilateral relationships, all anchored to Middle East impact.
 
-**Intelligence Engine Active** — Monitoring 6 major economies and their geopolitical posture toward the Middle East.
+The **WRDI panel** on the right shows live risk scores across four dimensions — Political, Military, Economic, and Social — for each country and pair.
 
-I analyze real-time market data as political signals and anticipate the nature of upcoming decisions based on each country's best economic interests.
-
-**Capabilities:**
-- **Country-Pair Analysis**: Select any two countries from the matrix to get a structured bilateral intelligence brief
-- **Political Anticipation**: Based on current market data, I assess likely political moves in the next 12-24 months
-- **Middle East Impact**: Every analysis includes a dedicated assessment of regional impact
-- **Scenario Assessment**: Evaluate the most dangerous emerging scenarios and their market signals
-
-**Select a country pair from the matrix** or ask me anything about current geopolitical dynamics.`,
+What would you like to explore? You can select a country pair from the matrix, or just ask me anything.`,
       timestamp: new Date(),
       analysisType: "general",
     };
@@ -69,7 +63,6 @@ I analyze real-time market data as political signals and anticipate the nature o
 
     setInput("");
     setIsStreaming(true);
-    // On mobile, switch to chat tab when a message is sent
     setMobileTab("chat");
 
     const userMsg: ChatMessage = {
@@ -92,9 +85,7 @@ I analyze real-time market data as political signals and anticipate the nature o
 
     try {
       const detectedPair = detectPairFromQuestion(text);
-      if (detectedPair) {
-        setSelectedPair(detectedPair.id);
-      }
+      if (detectedPair) setSelectedPair(detectedPair.id);
 
       const allMessages = [...messages, userMsg];
       let fullContent = "";
@@ -102,18 +93,14 @@ I analyze real-time market data as political signals and anticipate the nature o
       for await (const chunk of streamChatResponse(allMessages, marketData)) {
         fullContent += chunk;
         setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantId
-              ? { ...m, content: fullContent }
-              : m
-          )
+          prev.map(m => m.id === assistantId ? { ...m, content: fullContent } : m)
         );
       }
-    } catch (error) {
+    } catch {
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: "**SIGNAL INTERRUPTED** — Unable to connect to intelligence engine. Please check your connection and retry." }
+            ? { ...m, content: "**Connection interrupted.** Please retry." }
             : m
         )
       );
@@ -135,7 +122,7 @@ I analyze real-time market data as political signals and anticipate the nature o
     }
   };
 
-  // ── Chat Panel (shared between desktop center and mobile chat tab) ──────────
+  // ── Chat Panel ───────────────────────────────────────────────────────────────
   const ChatPanel = (
     <div className="flex flex-col h-full min-h-0">
       {/* Chat header */}
@@ -164,7 +151,7 @@ I analyze real-time market data as political signals and anticipate the nature o
         </div>
       </div>
 
-      {/* Messages — flex-1 with overflow-y-auto is the key for proper scrolling */}
+      {/* Messages */}
       <div
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-3 md:p-4 space-y-4 overscroll-contain"
@@ -173,7 +160,9 @@ I analyze real-time market data as political signals and anticipate the nature o
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === "user" ? "flex justify-end" : "flex justify-start"}`}
+            className={`animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+              msg.role === "user" ? "flex justify-end" : "flex justify-start"
+            }`}
           >
             {msg.role === "assistant" ? (
               <div className="max-w-[95%] md:max-w-[90%] w-full">
@@ -205,7 +194,7 @@ I analyze real-time market data as political signals and anticipate the nature o
                         <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: "150ms" }} />
                         <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
-                      <span className="font-mono text-xs text-muted-foreground">PROCESSING INTELLIGENCE...</span>
+                      <span className="font-mono text-xs text-muted-foreground">PROCESSING...</span>
                     </div>
                   )}
                 </div>
@@ -230,8 +219,8 @@ I analyze real-time market data as political signals and anticipate the nature o
       </div>
 
       {/* Suggested questions — only when conversation is fresh */}
-      {messages.length <= 1 && (
-        <div className="px-3 md:px-4 pb-2 flex-shrink-0">
+      {messages.length <= 2 && (
+        <div className="px-3 md:px-4 py-2 border-t border-border/50 flex-shrink-0">
           <p className="font-mono text-xs text-muted-foreground mb-2">SUGGESTED QUERIES:</p>
           <div className="flex flex-wrap gap-1.5">
             {SUGGESTED_QUESTIONS.slice(0, 4).map((q, i) => (
@@ -258,12 +247,11 @@ I analyze real-time market data as political signals and anticipate the nature o
               value={input}
               onChange={(e) => {
                 setInput(e.target.value);
-                // Auto-resize
                 e.target.style.height = "auto";
                 e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Query the intelligence engine..."
+              placeholder="Ask anything about geopolitics..."
               className="w-full bg-input border border-border rounded-sm pl-7 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:border-amber-500/50 focus:ring-0 font-mono overflow-hidden"
               style={{ minHeight: "44px", maxHeight: "120px", height: "44px" }}
               rows={1}
@@ -280,39 +268,10 @@ I analyze real-time market data as political signals and anticipate the nature o
           </button>
         </div>
         <p className="font-mono text-xs text-muted-foreground/40 mt-1.5 pl-7 hidden md:block">
-          ENTER to send · SHIFT+ENTER for new line · Data refreshes every 5 minutes
+          ENTER to send · SHIFT+ENTER for new line · WRDI updates every 5 minutes
         </p>
       </div>
     </div>
-  );
-
-  // ── Right panel content ──────────────────────────────────────────────────────
-  const RightPanelContent = (panelId: typeof activePanel) => (
-    <>
-      {panelId === "matrix" && (
-        <RelationshipMatrix
-          pairs={COUNTRY_PAIRS}
-          countries={COUNTRIES}
-          selectedPair={selectedPair}
-          onPairSelect={handlePairSelect}
-        />
-      )}
-      {panelId === "market" && (
-        <MarketPanel
-          marketData={marketData}
-          countries={COUNTRIES}
-          loading={marketLoading}
-        />
-      )}
-      {panelId === "scenarios" && (
-        <ScenarioPanel
-          scenarios={MIDDLE_EAST_SCENARIOS}
-          onScenarioSelect={(scenario: MiddleEastScenario) => {
-            sendMessage(`Analyze the "${scenario.title}" scenario in detail. Trigger: ${scenario.trigger}. Assess probability, economic impact, political impact, and what market signals we should watch for. What can each major power do to prevent or exploit this scenario?`);
-          }}
-        />
-      )}
-    </>
   );
 
   return (
@@ -322,47 +281,87 @@ I analyze real-time market data as political signals and anticipate the nature o
 
       {/* ── DESKTOP LAYOUT (md and above) ───────────────────────────────────── */}
       <div className="hidden md:flex flex-1 overflow-hidden">
-        {/* Left sidebar */}
+
+        {/* Left sidebar — country navigator */}
         <CountrySidebar
           countries={COUNTRIES}
           marketData={marketData}
           onCountrySelect={(countryId: string) => {
             const country = COUNTRIES.find(c => c.id === countryId);
             if (country) {
-              sendMessage(`Provide a comprehensive geopolitical and economic intelligence brief on ${country.name}. Include current market signals, key vulnerabilities, geopolitical posture, and Middle East interests.`);
+              sendMessage(`Quick read on ${country.name} — what's the most important geopolitical signal right now?`);
             }
           }}
         />
 
-        {/* Center chat */}
+        {/* Center — chat */}
         <div className="flex-1 flex flex-col min-w-0 border-x border-border overflow-hidden">
           {ChatPanel}
         </div>
 
-        {/* Right panel */}
+        {/* Right panel — WRDI + supporting panels */}
         <div className="w-80 flex flex-col border-l border-border overflow-hidden">
+          {/* Tab bar */}
           <div className="flex border-b border-border flex-shrink-0">
             {[
-              { id: "matrix", label: "MATRIX", icon: Globe },
-              { id: "market", label: "MARKETS", icon: Zap },
-              { id: "scenarios", label: "SCENARIOS", icon: AlertTriangle },
+              { id: "wrdi",      label: "WRDI",      icon: Activity },
+              { id: "matrix",    label: "MATRIX",    icon: Globe },
+              { id: "market",    label: "MARKETS",   icon: Zap },
+              { id: "scenarios", label: "RISKS",     icon: AlertTriangle },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => setActivePanel(id as typeof activePanel)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 font-mono text-xs transition-all duration-200 ${
-                  activePanel === id
+                onClick={() => setActiveRightPanel(id as typeof activeRightPanel)}
+                className={`flex-1 flex items-center justify-center gap-1 py-2 font-mono text-[10px] transition-all duration-200 ${
+                  activeRightPanel === id
                     ? "text-amber-400 border-b-2 border-amber-400 bg-amber-500/5"
                     : "text-muted-foreground hover:text-foreground border-b-2 border-transparent"
                 }`}
               >
-                <Icon size={11} />
+                <Icon size={10} />
                 {label}
               </button>
             ))}
           </div>
-          <div className="flex-1 overflow-y-auto">
-            {RightPanelContent(activePanel)}
+
+          {/* Panel content */}
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            {activeRightPanel === "wrdi" && (
+              <WRDIPanel
+                marketData={marketData}
+                selectedPair={selectedPair}
+                loading={marketLoading}
+              />
+            )}
+            {activeRightPanel === "matrix" && (
+              <div className="flex-1 overflow-y-auto">
+                <RelationshipMatrix
+                  pairs={COUNTRY_PAIRS}
+                  countries={COUNTRIES}
+                  selectedPair={selectedPair}
+                  onPairSelect={handlePairSelect}
+                />
+              </div>
+            )}
+            {activeRightPanel === "market" && (
+              <div className="flex-1 overflow-y-auto">
+                <MarketPanel
+                  marketData={marketData}
+                  countries={COUNTRIES}
+                  loading={marketLoading}
+                />
+              </div>
+            )}
+            {activeRightPanel === "scenarios" && (
+              <div className="flex-1 overflow-y-auto">
+                <ScenarioPanel
+                  scenarios={MIDDLE_EAST_SCENARIOS}
+                  onScenarioSelect={(scenario: MiddleEastScenario) => {
+                    sendMessage(`What's the current status of the "${scenario.title}" scenario? Is it getting more or less likely based on today's market signals?`);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -370,7 +369,6 @@ I analyze real-time market data as political signals and anticipate the nature o
       {/* ── MOBILE LAYOUT (below md) ────────────────────────────────────────── */}
       <div className="flex md:hidden flex-1 flex-col overflow-hidden">
 
-        {/* Mobile content area — fills all space above the bottom nav */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
 
           {/* CHAT tab */}
@@ -380,7 +378,7 @@ I analyze real-time market data as political signals and anticipate the nature o
             </div>
           )}
 
-          {/* COUNTRIES tab */}
+          {/* ACTORS tab */}
           {mobileTab === "countries" && (
             <div className="flex-1 overflow-y-auto">
               <div className="p-3 border-b border-border bg-card/50">
@@ -394,7 +392,7 @@ I analyze real-time market data as political signals and anticipate the nature o
                     <button
                       key={country.id}
                       onClick={() => {
-                        sendMessage(`Provide a comprehensive geopolitical and economic intelligence brief on ${country.name}. Include current market signals, key vulnerabilities, geopolitical posture, and Middle East interests.`);
+                        sendMessage(`Quick read on ${country.name} — what's the most important geopolitical signal right now?`);
                         setMobileTab("chat");
                       }}
                       className="w-full flex items-center gap-3 p-3 rounded-sm border border-border hover:border-amber-500/40 bg-card/30 hover:bg-card/60 transition-all duration-200 active:scale-[0.98]"
@@ -436,6 +434,17 @@ I analyze real-time market data as political signals and anticipate the nature o
             </div>
           )}
 
+          {/* WRDI tab */}
+          {mobileTab === "wrdi" && (
+            <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+              <WRDIPanel
+                marketData={marketData}
+                selectedPair={selectedPair}
+                loading={marketLoading}
+              />
+            </div>
+          )}
+
           {/* MARKETS tab */}
           {mobileTab === "market" && (
             <div className="flex-1 overflow-y-auto">
@@ -452,48 +461,30 @@ I analyze real-time market data as political signals and anticipate the nature o
               />
             </div>
           )}
-
-          {/* SCENARIOS tab */}
-          {mobileTab === "scenarios" && (
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-3 border-b border-border bg-card/50">
-                <span className="font-mono text-xs text-amber-400 tracking-wide">MIDDLE EAST SCENARIOS</span>
-              </div>
-              <ScenarioPanel
-                scenarios={MIDDLE_EAST_SCENARIOS}
-                onScenarioSelect={(scenario: MiddleEastScenario) => {
-                  sendMessage(`Analyze the "${scenario.title}" scenario in detail. Trigger: ${scenario.trigger}. Assess probability, economic impact, political impact, and what market signals we should watch for. What can each major power do to prevent or exploit this scenario?`);
-                  setMobileTab("chat");
-                }}
-              />
-            </div>
-          )}
         </div>
 
-        {/* Mobile bottom navigation bar */}
-        <div className="flex-shrink-0 border-t border-border bg-card/80 backdrop-blur-sm safe-area-bottom">
+        {/* Mobile bottom navigation */}
+        <div className="flex-shrink-0 border-t border-border bg-card/80 backdrop-blur-sm">
           <div className="flex">
             {[
-              { id: "chat", label: "CHAT", icon: MessageSquare },
-              { id: "countries", label: "ACTORS", icon: Map },
-              { id: "matrix", label: "MATRIX", icon: Globe },
-              { id: "market", label: "MARKETS", icon: BarChart2 },
-              { id: "scenarios", label: "RISKS", icon: AlertTriangle },
+              { id: "chat",      label: "CHAT",    icon: MessageSquare },
+              { id: "countries", label: "ACTORS",  icon: Map },
+              { id: "matrix",    label: "MATRIX",  icon: Globe },
+              { id: "wrdi",      label: "WRDI",    icon: Activity },
+              { id: "market",    label: "MARKETS", icon: BarChart2 },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setMobileTab(id as typeof mobileTab)}
-                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-all duration-200 ${
-                  mobileTab === id
-                    ? "text-amber-400"
-                    : "text-muted-foreground"
+                className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-all duration-200 relative ${
+                  mobileTab === id ? "text-amber-400" : "text-muted-foreground"
                 }`}
                 style={{ minHeight: "56px" }}
               >
                 <Icon size={18} />
                 <span className="font-mono text-[9px] tracking-wide leading-none">{label}</span>
                 {mobileTab === id && (
-                  <div className="absolute bottom-0 w-6 h-0.5 bg-amber-400 rounded-full" />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-amber-400 rounded-full" />
                 )}
               </button>
             ))}
