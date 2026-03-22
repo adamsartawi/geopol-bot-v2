@@ -28,7 +28,80 @@ import {
   BarChart2,
   AlertTriangle,
   RefreshCw,
+  Info,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+// ── WRDI Metric Definitions (hover tooltips) ──────────────────────────────────
+const METRIC_DEFINITIONS: Record<string, { name: string; definition: string; formula: string; sources: string }> = {
+  composite: {
+    name: "WRDI Composite Score",
+    definition: "The World Risk & Dynamics Index (WRDI) is a weighted composite score measuring a country's overall geopolitical risk level across four dimensions. Scores range from 1 (very low risk) to 10 (critical risk).",
+    formula: "Political×0.25 + Military×0.30 + Economic×0.25 + Social×0.20",
+    sources: "GDELT, ACLED, World Bank, IMF, UNHCR, EIA, live market data",
+  },
+  political: {
+    name: "Political / Diplomatic Dimension",
+    definition: "Measures the stability of a country's political system and its diplomatic relationships. High scores indicate significant political instability, leadership crises, diplomatic isolation, or active sanctions regimes. Weight: 25% of composite score.",
+    formula: "Diplomatic incidents + Election volatility + Leadership stability + UN activity + Sanctions exposure",
+    sources: "GDELT news events, UN Security Council records, State Dept advisories",
+  },
+  military: {
+    name: "Military / Security Dimension",
+    definition: "Measures active military threats, conflict intensity, and security posture. This is the highest-weighted dimension (30%) because military events have the most immediate and severe impact on regional stability and Middle East dynamics.",
+    formula: "Active conflicts + Troop deployments + Arms transfers + Nuclear posturing + Terrorism index",
+    sources: "ACLED conflict data, SIPRI arms transfers, IISS Military Balance, Global Terrorism Index",
+  },
+  economic: {
+    name: "Economic Dimension",
+    definition: "Measures economic health and vulnerability. High scores indicate economic stress (high inflation, recession, sanctions-driven contraction, currency crisis) that constrains a government's foreign policy options and increases domestic pressure to act. Weight: 25%.",
+    formula: "GDP growth + Inflation rate + Currency stability + Trade balance + Sanctions impact + Commodity exposure",
+    sources: "World Bank API, IMF WEO, EIA energy data, Yahoo Finance live market data",
+  },
+  social: {
+    name: "Social Dimension",
+    definition: "Measures social cohesion, humanitarian conditions, and internal stability. High scores indicate large refugee populations, food insecurity, public protests, or human rights crises that can destabilize governments and trigger intervention. Weight: 20%.",
+    formula: "Refugee population + Food security index + Protest intensity + Human rights score + Inequality",
+    sources: "UNHCR refugee statistics, WFP food security data, Amnesty International, HRW reports",
+  },
+  tension: {
+    name: "Bilateral Tension Score",
+    definition: "Measures the current level of tension between two countries based on active disputes, sanctions, military posturing, and diplomatic incidents. Ranges from 1 (cooperative) to 10 (open hostility). Derived from the WRDI differential between the two countries' military and political scores.",
+    formula: "Avg(Military scores) × 0.4 + Avg(Political scores) × 0.3 + Active sanctions × 0.2 + Diplomatic incidents × 0.1",
+    sources: "Country pair matrices, ACLED bilateral events, GDELT bilateral news",
+  },
+  middleEastImpact: {
+    name: "Middle East Impact Score",
+    definition: "Measures how strongly a bilateral relationship between two major powers affects Middle East stability. High scores indicate that decisions made in this relationship directly determine outcomes in the region — through proxy conflicts, energy policy, arms supplies, or diplomatic pressure on regional actors.",
+    formula: "Energy dependency × 0.3 + Proxy conflict involvement × 0.3 + Arms supply chains × 0.2 + Diplomatic leverage × 0.2",
+    sources: "WRDI pair matrices, EIA energy data, SIPRI arms transfers, UN Security Council records",
+  },
+};
+
+function MetricTooltip({ metricKey, children }: { metricKey: string; children: React.ReactNode }) {
+  const def = METRIC_DEFINITIONS[metricKey];
+  if (!def) return <>{children}</>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help inline-flex items-center gap-1">
+          {children}
+          <Info size={9} className="opacity-40 hover:opacity-80 transition-opacity" style={{ color: "#00d4ff" }} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-xs p-3" style={{ background: "#0d1117", border: "1px solid rgba(0,212,255,0.2)", color: "#ccc" }}>
+        <div className="space-y-2">
+          <div className="font-bold text-xs" style={{ color: "#00d4ff" }}>{def.name}</div>
+          <p className="text-xs leading-relaxed" style={{ color: "#aaa" }}>{def.definition}</p>
+          <div className="text-[10px] font-mono rounded p-1.5" style={{ background: "rgba(255,255,255,0.05)", color: "#ffc107" }}>
+            {def.formula}
+          </div>
+          <div className="text-[10px]" style={{ color: "#555" }}>Sources: {def.sources}</div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 interface WRDIPanelProps {
   marketData: MarketData[];
@@ -68,7 +141,7 @@ function TrendIcon({ trend }: { trend: "rising" | "falling" | "stable" }) {
 }
 
 function DimensionRow({
-  label, weight, score, color, expanded, onToggle
+  label, weight, score, color, expanded, onToggle, tooltipKey
 }: {
   label: string;
   weight: string;
@@ -76,6 +149,7 @@ function DimensionRow({
   color: string;
   expanded: boolean;
   onToggle: () => void;
+  tooltipKey?: string;
 }) {
   return (
     <button
@@ -85,7 +159,11 @@ function DimensionRow({
       <span className="font-mono text-[10px] text-muted-foreground w-4">
         {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
       </span>
-      <span className="text-xs text-foreground/80 flex-1 text-left">{label}</span>
+      <span className="text-xs text-foreground/80 flex-1 text-left">
+        {tooltipKey ? (
+          <MetricTooltip metricKey={tooltipKey}>{label}</MetricTooltip>
+        ) : label}
+      </span>
       <span className="font-mono text-[10px] text-muted-foreground">{weight}</span>
       <span className={`font-mono text-xs font-bold w-7 text-right ${color}`}>
         {score.toFixed(1)}
@@ -99,10 +177,10 @@ function CountryScoreCard({ score }: { score: WRDIScore }) {
   const [showEvents, setShowEvents] = useState(false);
 
   const dims = [
-    { key: "political", label: "Political / Diplomatic", weight: "25%", dim: score.political },
-    { key: "military",  label: "Military / Security",   weight: "30%", dim: score.military },
-    { key: "economic",  label: "Economic",              weight: "25%", dim: score.economic },
-    { key: "social",    label: "Social",                weight: "20%", dim: score.social },
+    { key: "political", label: "Political / Diplomatic", weight: "25%", dim: score.political, tooltipKey: "political" },
+    { key: "military",  label: "Military / Security",   weight: "30%", dim: score.military,  tooltipKey: "military" },
+    { key: "economic",  label: "Economic",              weight: "25%", dim: score.economic,  tooltipKey: "economic" },
+    { key: "social",    label: "Social",                weight: "20%", dim: score.social,    tooltipKey: "social" },
   ];
 
   const country = COUNTRIES.find(c => c.id === score.countryId);
@@ -124,9 +202,11 @@ function CountryScoreCard({ score }: { score: WRDIScore }) {
           </div>
         </div>
         <div className="text-right">
-          <div className={`font-mono text-xl font-bold ${classificationColor(score.classification)}`}>
-            {score.composite.toFixed(1)}
-          </div>
+          <MetricTooltip metricKey="composite">
+            <div className={`font-mono text-xl font-bold ${classificationColor(score.classification)}`}>
+              {score.composite.toFixed(1)}
+            </div>
+          </MetricTooltip>
           <div className="font-mono text-[10px] text-muted-foreground">/10</div>
         </div>
       </div>
@@ -136,7 +216,7 @@ function CountryScoreCard({ score }: { score: WRDIScore }) {
 
       {/* Dimension breakdown */}
       <div className="mt-2 space-y-0.5">
-        {dims.map(({ key, label, weight, dim }) => (
+        {dims.map(({ key, label, weight, dim, tooltipKey }) => (
           <div key={key}>
             <DimensionRow
               label={label}
@@ -145,6 +225,7 @@ function CountryScoreCard({ score }: { score: WRDIScore }) {
               color={dim.color}
               expanded={expandedDim === key}
               onToggle={() => setExpandedDim(expandedDim === key ? null : key)}
+              tooltipKey={tooltipKey}
             />
             {expandedDim === key && (
               <div className="ml-4 mt-1 mb-1 space-y-1 border-l border-white/10 pl-2">

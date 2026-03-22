@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { geopolRouter } from "../geopol";
+import { runPipeline } from "../pipeline";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -62,6 +63,27 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+
+    // ── Automated Intelligence Pipeline Scheduler ────────────────────────────
+    // Run immediately on startup (after 30s delay to let DB settle),
+    // then every 6 hours.
+    const PIPELINE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+    const STARTUP_DELAY_MS = 30 * 1000; // 30 seconds
+
+    setTimeout(() => {
+      console.log("[Pipeline] Running initial pipeline on startup...");
+      runPipeline()
+        .then(result => console.log(`[Pipeline] Startup run complete: ${JSON.stringify(result)}`))
+        .catch(e => console.error("[Pipeline] Startup run failed:", e));
+
+      // Schedule recurring runs every 6 hours
+      setInterval(() => {
+        console.log("[Pipeline] Running scheduled pipeline...");
+        runPipeline()
+          .then(result => console.log(`[Pipeline] Scheduled run complete: ${JSON.stringify(result)}`))
+          .catch(e => console.error("[Pipeline] Scheduled run failed:", e));
+      }, PIPELINE_INTERVAL_MS);
+    }, STARTUP_DELAY_MS);
   });
 }
 

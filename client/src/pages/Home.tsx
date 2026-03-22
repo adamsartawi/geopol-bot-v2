@@ -17,10 +17,11 @@ import RelationshipMatrix from "@/components/RelationshipMatrix";
 import MarketPanel from "@/components/MarketPanel";
 import ScenarioPanel from "@/components/ScenarioPanel";
 import WRDIPanel from "@/components/WRDIPanel";
+import PipelinePanel from "@/components/PipelinePanel";
 import { MiddleEastScenario } from "@/lib/geopoliticalData";
 import {
   Send, RefreshCw, AlertTriangle, Zap, Globe,
-  ChevronRight, MessageSquare, Map, BarChart2, Activity
+  ChevronRight, MessageSquare, Map, BarChart2, Activity, Cpu
 } from "lucide-react";
 
 export default function Home() {
@@ -28,7 +29,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [activeRightPanel, setActiveRightPanel] = useState<"wrdi" | "matrix" | "market" | "scenarios">("wrdi");
+  const [activeRightPanel, setActiveRightPanel] = useState<"wrdi" | "matrix" | "market" | "scenarios" | "pipeline">("wrdi");
   const [mobileTab, setMobileTab] = useState<"chat" | "countries" | "matrix" | "wrdi" | "market">("chat");
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -308,6 +309,7 @@ What would you like to explore? You can select a country pair from the matrix, o
               { id: "matrix",    label: "MATRIX",    icon: Globe },
               { id: "market",    label: "MARKETS",   icon: Zap },
               { id: "scenarios", label: "RISKS",     icon: AlertTriangle },
+              { id: "pipeline",  label: "PIPELINE",  icon: Cpu },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -360,6 +362,11 @@ What would you like to explore? You can select a country pair from the matrix, o
                     sendMessage(`What's the current status of the "${scenario.title}" scenario? Is it getting more or less likely based on today's market signals?`);
                   }}
                 />
+              </div>
+            )}
+            {activeRightPanel === "pipeline" && (
+              <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+                <PipelinePanel />
               </div>
             )}
           </div>

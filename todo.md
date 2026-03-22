@@ -78,3 +78,20 @@
 - [x] Rewrite system prompt so chatbot answers only from structured in-code data (no general LLM knowledge)
 - [x] Inject full country profiles, WRDI scores, pair matrices, market data, and scenarios into every LLM call
 - [x] Add explicit instruction: if data does not cover the question, say so rather than speculate
+
+## Automated Intelligence Pipeline
+- [x] Migrate knowledge base (country profiles, pairs, scenarios) from static TS file to database tables
+- [x] Build GDELT API integration for real-time global news/event ingestion
+- [x] Build ACLED API integration for armed conflict data
+- [x] Build UNHCR API integration for refugee/displacement data
+- [x] Build World Bank + IMF API integration for economic indicators
+- [x] Build EIA API integration for energy data
+- [x] Build LLM event classification engine (country, dimension, severity, affected fields)
+- [x] Build knowledge base field updater (rewrites DB fields from classified events)
+- [x] Build WRDI score recalculation from live events + market data
+- [x] Build pipeline change log (timestamp, source, event, fields changed)
+- [x] Build scheduled pipeline runner (every 6 hours)
+- [x] Build admin panel showing pipeline logs and knowledge base diffs
+- [x] Update chatbot to read from database instead of static TS file
+- [x] Add metric definition tooltips (hover over any WRDI metric to see its definition)
+- [x] Archive previous knowledge base versions before each update
