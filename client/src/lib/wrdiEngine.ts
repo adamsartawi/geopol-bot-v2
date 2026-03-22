@@ -112,8 +112,31 @@ export function classificationBg(c: WRDIClassification): string {
 
 // ── Market signal helpers ────────────────────────────────────────────────────
 
+// Maps WRDI internal country IDs to the market data country codes used in LIVE_DATA_CONFIGS
+const COUNTRY_CODE_MAP: Record<string, string> = {
+  us:      "US",
+  china:   "CN",
+  russia:  "RU",
+  israel:  "IL",
+  canada:  "CA",
+  europe:  "EU",
+};
+
 function getMarketValue(marketData: MarketData[], country: string, type: string): number | null {
-  const d = marketData.find(m => m.country === country && m.type === type);
+  // Resolve the country code — try both the raw value and the mapped value
+  const code = COUNTRY_CODE_MAP[country] ?? country;
+  const d = marketData.find(m =>
+    (m.country === code || m.country === country) && m.type === type
+  );
+  return d?.changePercent ?? null;
+}
+
+function getGlobalCommodity(marketData: MarketData[], commodityName: string): number | null {
+  // Commodities are stored with country="GLOBAL" and type="commodity"
+  const d = marketData.find(m =>
+    m.country === "GLOBAL" && m.type === "commodity" &&
+    m.name.toLowerCase().includes(commodityName.toLowerCase())
+  );
   return d?.changePercent ?? null;
 }
 
@@ -251,8 +274,13 @@ export function computeWRDIScore(
 
   const indexChange = getMarketValue(marketData, countryId, "index");
   const currencyChange = getMarketValue(marketData, countryId, "currency");
-  const oilChange = getMarketValue(marketData, "commodity", "oil") ??
-                    getMarketValue(marketData, "us", "commodity");
+  // Commodities are stored with country="GLOBAL" and type="commodity"
+  const oilChange = getGlobalCommodity(marketData, "WTI") ??
+                    getGlobalCommodity(marketData, "Brent") ??
+                    getGlobalCommodity(marketData, "Crude");
+  const gasChange = getGlobalCommodity(marketData, "Natural Gas") ??
+                    getGlobalCommodity(marketData, "Gas");
+  const goldChange = getGlobalCommodity(marketData, "Gold");
 
   // ── Political dimension ──────────────────────────────────────────────────
   // Driven by: diplomatic statements, UN resolutions, alliance activity
@@ -320,13 +348,18 @@ export function computeWRDIScore(
       source: "IISS"
     }
   ];
-
-  // ── Economic dimension ───────────────────────────────────────────────────
+  // ── Economic dimension ────────────────────────────────────────────────────
   // Driven by: commodity prices, currency, trade flows, sanctions
   const economicMarketSignal = marketSignalToScore(indexChange);
   const currencySignal = marketSignalToScore(currencyChange);
+  // Commodity exposure: oil-dependent countries (RU, CA) are more sensitive to oil price
+  // Gas-dependent countries (EU, IL) are more sensitive to gas price
+  const commodityRelevant = profile.commodityExposure === "oil" ? oilChange
+    : profile.commodityExposure === "gas" ? (gasChange ?? oilChange)
+    : oilChange;
+  const commoditySignal = marketSignalToScore(commodityRelevant, true); // invert: rising commodity = economic risk for importers
   const economicScore = Math.min(10, Math.max(1,
-    (profile.economicBase * 0.5) + (economicMarketSignal * 0.3) + (currencySignal * 0.2)
+    (profile.economicBase * 0.4) + (economicMarketSignal * 0.25) + (currencySignal * 0.2) + (commoditySignal * 0.15)
   ));
 
   const economicIndicators: WRDIIndicator[] = [
@@ -343,10 +376,14 @@ export function computeWRDIScore(
       source: "OANDA"
     },
     {
-      name: "Trade Flows",
-      value: economicScore > 6 ? "Disruption signals" : "Normal",
-      signal: economicScore > 6 ? "negative" : "positive",
-      source: "IMF / World Bank"
+      name: profile.commodityExposure === "gas" ? "Natural Gas Price" : "Oil Price (WTI)",
+      value: commodityRelevant !== null
+        ? `${commodityRelevant > 0 ? "+" : ""}${commodityRelevant.toFixed(2)}% today`
+        : "Data loading",
+      signal: commodityRelevant !== null
+        ? (commodityRelevant > 2 ? "negative" : commodityRelevant > -1 ? "neutral" : "positive")
+        : "neutral",
+      source: "EIA / Yahoo Finance"
     },
     {
       name: "Sanctions Exposure",

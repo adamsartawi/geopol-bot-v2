@@ -412,12 +412,20 @@ export default function WRDIPanel({ marketData, selectedPair, loading }: WRDIPan
   );
 
   const handleGenerateReport = () => {
+    if (generatingReport) return;
     setGeneratingReport(true);
+    // Use a short timeout to allow React to render the loading state first
     setTimeout(() => {
-      const report = generateWeeklyReport(countryScores, marketData);
-      setWeeklyReport(report);
-      setGeneratingReport(false);
-    }, 300);
+      try {
+        const report = generateWeeklyReport(countryScores, marketData);
+        setWeeklyReport(report);
+      } catch (e) {
+        console.error("Report generation failed:", e);
+        setWeeklyReport("## Report Unavailable\n\nUnable to generate report at this time. Please try again in a moment.");
+      } finally {
+        setGeneratingReport(false);
+      }
+    }, 400);
   };
 
   // Global average
@@ -518,9 +526,10 @@ export default function WRDIPanel({ marketData, selectedPair, loading }: WRDIPan
                   </div>
                   <button
                     onClick={handleGenerateReport}
-                    disabled={generatingReport || loading}
-                    className="px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-sm text-amber-400 font-mono text-xs hover:bg-amber-500/20 transition-all disabled:opacity-40"
+                    disabled={generatingReport}
+                    className="px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-sm text-amber-400 font-mono text-xs hover:bg-amber-500/20 transition-all disabled:opacity-40 flex items-center gap-2"
                   >
+                    {generatingReport && <RefreshCw size={10} className="animate-spin" />}
                     {generatingReport ? "GENERATING..." : "GENERATE REPORT"}
                   </button>
                 </div>

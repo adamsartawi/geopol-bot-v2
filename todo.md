@@ -95,3 +95,8 @@
 - [x] Update chatbot to read from database instead of static TS file
 - [x] Add metric definition tooltips (hover over any WRDI metric to see its definition)
 - [x] Archive previous knowledge base versions before each update
+
+## Bug Fixes — WRDI Panel
+- [x] Fix SCORES tab showing no data (WRDI scores not computing — market data not reaching component)
+- [x] Fix PAIRS tab showing no data (same root cause)
+- [x] Fix REPORT tab stuck on "Market data is still loading" even after data loads
