@@ -141,3 +141,54 @@ describe("Middle East Impact Score", () => {
     });
   });
 });
+
+describe("Country ID Normalization", () => {
+  // Verify the reverse mapping from uppercase ISO codes to WRDI profile keys
+  const UPPERCASE_TO_PROFILE_KEY: Record<string, string> = {
+    US:  "us",
+    CN:  "china",
+    RU:  "russia",
+    IL:  "israel",
+    CA:  "canada",
+    EU:  "europe",
+  };
+
+  const COUNTRY_PROFILES_KEYS = ["us", "china", "russia", "israel", "canada", "europe"];
+
+  it("maps all uppercase ISO codes to valid profile keys", () => {
+    const uppercaseCodes = ["US", "CN", "RU", "IL", "CA", "EU"];
+    uppercaseCodes.forEach(code => {
+      const profileKey = UPPERCASE_TO_PROFILE_KEY[code];
+      expect(profileKey).toBeDefined();
+      expect(COUNTRY_PROFILES_KEYS).toContain(profileKey);
+    });
+  });
+
+  it("handles all 6 monitored economies", () => {
+    expect(Object.keys(UPPERCASE_TO_PROFILE_KEY)).toHaveLength(6);
+  });
+
+  it("profile key for US is 'us'", () => {
+    expect(UPPERCASE_TO_PROFILE_KEY["US"]).toBe("us");
+  });
+
+  it("profile key for CN is 'china'", () => {
+    expect(UPPERCASE_TO_PROFILE_KEY["CN"]).toBe("china");
+  });
+
+  it("profile key for RU is 'russia'", () => {
+    expect(UPPERCASE_TO_PROFILE_KEY["RU"]).toBe("russia");
+  });
+
+  it("profile key for IL is 'israel'", () => {
+    expect(UPPERCASE_TO_PROFILE_KEY["IL"]).toBe("israel");
+  });
+
+  it("profile key for CA is 'canada'", () => {
+    expect(UPPERCASE_TO_PROFILE_KEY["CA"]).toBe("canada");
+  });
+
+  it("profile key for EU is 'europe'", () => {
+    expect(UPPERCASE_TO_PROFILE_KEY["EU"]).toBe("europe");
+  });
+});

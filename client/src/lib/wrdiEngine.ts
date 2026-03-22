@@ -122,13 +122,32 @@ const COUNTRY_CODE_MAP: Record<string, string> = {
   europe:  "EU",
 };
 
+// Reverse map: uppercase ISO codes → WRDI internal profile keys
+// This allows WRDIPanel to pass COUNTRIES[].id (uppercase) directly
+const UPPERCASE_TO_PROFILE_KEY: Record<string, string> = {
+  US:  "us",
+  CN:  "china",
+  RU:  "russia",
+  IL:  "israel",
+  CA:  "canada",
+  EU:  "europe",
+};
+
 function getMarketValue(marketData: MarketData[], country: string, type: string): number | null {
   // Resolve the country code — try both the raw value and the mapped value
   const code = COUNTRY_CODE_MAP[country] ?? country;
   const d = marketData.find(m =>
     (m.country === code || m.country === country) && m.type === type
   );
-  return d?.changePercent ?? null;
+  if (d) return d?.changePercent ?? null;
+  // Special case: EU currency (EUR/USD) is stored under GLOBAL, not EU
+  if ((code === "EU" || country === "EU" || country === "europe") && type === "currency") {
+    const euCurrency = marketData.find(m =>
+      m.country === "GLOBAL" && m.type === "currency" && m.name.includes("EUR")
+    );
+    return euCurrency?.changePercent ?? null;
+  }
+  return null;
 }
 
 function getGlobalCommodity(marketData: MarketData[], commodityName: string): number | null {
@@ -269,8 +288,10 @@ export function computeWRDIScore(
   countryId: string,
   marketData: MarketData[]
 ): WRDIScore {
-  const profile = COUNTRY_PROFILES[countryId];
-  if (!profile) throw new Error(`Unknown country: ${countryId}`);
+  // Normalize: accept both uppercase ISO codes (US, CN, RU) and internal keys (us, china, russia)
+  const normalizedId = UPPERCASE_TO_PROFILE_KEY[countryId] ?? countryId;
+  const profile = COUNTRY_PROFILES[normalizedId];
+  if (!profile) throw new Error(`Unknown country: ${countryId} (normalized: ${normalizedId})`);
 
   const indexChange = getMarketValue(marketData, countryId, "index");
   const currencyChange = getMarketValue(marketData, countryId, "currency");
@@ -553,18 +574,21 @@ function generateDangerousScenario(
 ): string {
   const maxMilitary = Math.max(s1.military.score, s2.military.score);
   const maxEconomic = Math.max(s1.economic.score, s2.economic.score);
+  // Normalize to lowercase profile keys for comparison (handles both US/RU and us/russia)
+  const n1 = (UPPERCASE_TO_PROFILE_KEY[c1] ?? c1).toLowerCase();
+  const n2 = (UPPERCASE_TO_PROFILE_KEY[c2] ?? c2).toLowerCase();
 
-  if (c1 === "us" && c2 === "russia" || c1 === "russia" && c2 === "us") {
+  if ((n1 === "us" && n2 === "russia") || (n1 === "russia" && n2 === "us")) {
     return maxMilitary > 8
       ? "Direct military confrontation in a third-party theater (Syria, Ukraine, Arctic) triggering Article 5 debate"
       : "Cyber-attack on critical infrastructure attributed to state actor, triggering escalation spiral";
   }
-  if (c1 === "us" && c2 === "china" || c1 === "china" && c2 === "us") {
+  if ((n1 === "us" && n2 === "china") || (n1 === "china" && n2 === "us")) {
     return maxMilitary > 7
       ? "Taiwan Strait incident escalates to naval blockade, disrupting global semiconductor supply chains"
       : "Trade war escalation triggers synchronized market crash across Asian and US equities";
   }
-  if (c1 === "israel" || c2 === "israel") {
+  if (n1 === "israel" || n2 === "israel") {
     return maxMilitary > 7
       ? "Multi-front conflict activation (Gaza + Lebanon + Iran proxy) overwhelming regional containment capacity"
       : "Normalization deal collapse triggers regional realignment, drawing in external powers";

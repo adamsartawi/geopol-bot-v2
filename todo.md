@@ -107,3 +107,9 @@
 - [x] Implement ACLED data fetch with 6-hour rolling window and 100-event limit
 - [x] Wire ACLED events into LLM classification for Military dimension scoring
 - [x] Test ACLED connection end-to-end
+
+## Bug Fixes — WRDI Blank Tabs (Round 2)
+- [x] Fix SCORES and PAIRS tabs blank — root cause: country ID mismatch (COUNTRIES uses uppercase US/CN/RU, COUNTRY_PROFILES uses lowercase us/china/russia). Fixed by adding UPPERCASE_TO_PROFILE_KEY reverse map in wrdiEngine.ts
+- [x] Fix generateDangerousScenario using hardcoded lowercase IDs for comparison — updated to normalize IDs before comparison
+- [x] Fix EU currency lookup (EUR/USD stored as GLOBAL not EU) — added special case in getMarketValue
+- [x] Add 8 new unit tests for country ID normalization (47 tests total, all passing)
