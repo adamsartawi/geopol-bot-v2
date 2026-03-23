@@ -9,7 +9,7 @@ import {
   wrdiMetricDefinitions,
 } from "../drizzle/schema";
 import { desc, eq, and, gte } from "drizzle-orm";
-import { runPipeline } from "./pipeline";
+import { runPipeline, runFastPipeline } from "./pipeline";
 import { z } from "zod";
 
 export const appRouter = router({
@@ -99,14 +99,23 @@ export const appRouter = router({
 
   // ── Pipeline ───────────────────────────────────────────────────────────────
   pipeline: router({
-    /** Manually trigger a pipeline run (admin only) */
+    /** Manually trigger a full pipeline run (admin only) */
     trigger: protectedProcedure.mutation(async ({ ctx }) => {
       if (ctx.user?.role !== "admin") {
         throw new Error("Admin access required");
       }
       // Run async — don't await so the response returns immediately
       runPipeline().catch(e => console.error("[Pipeline] Manual trigger failed:", e));
-      return { triggered: true, message: "Pipeline started in background" };
+      return { triggered: true, message: "Full pipeline started in background" };
+    }),
+
+    /** Manually trigger a fast pipeline run (admin only) */
+    triggerFast: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user?.role !== "admin") {
+        throw new Error("Admin access required");
+      }
+      runFastPipeline().catch(e => console.error("[Pipeline:FAST] Manual trigger failed:", e));
+      return { triggered: true, message: "Fast pipeline started in background" };
     }),
 
     /** Get recent pipeline runs */

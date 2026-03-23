@@ -216,3 +216,32 @@
 - [x] إضافة apple-touch-icon لـ iOS
 - [x] إضافة PWAInstallPrompt component (Android + iOS instructions)
 - [x] إضافة safe-area-inset CSS variables لـ notch support
+
+## Feature: Expanded RSS Sources + Fast Pipeline (15 min)
+
+### RSS Sources (new)
+- [ ] Reuters: Top News, World, Business, Markets
+- [ ] Bloomberg: Markets, Politics, Technology
+- [ ] AP News: World, Politics, Business
+- [ ] WSJ: World News, Markets
+- [ ] Financial Times: World, Markets
+- [ ] The Economist: Latest
+- [ ] CNBC: World, Markets, Economy
+- [ ] Times of Israel: Latest
+- [ ] Jerusalem Post: Latest
+- [ ] Haaretz: Latest
+- [ ] i24 News English: Latest
+- [ ] Moscow Times: Latest
+- [ ] Iran International English: Latest
+- [ ] South China Morning Post: Latest
+- [ ] Caixin Global: Latest
+- [ ] IMF News: Latest
+- [ ] World Bank News: Latest (RSS only, not API)
+
+### Pipeline Split
+- [ ] تقسيم pipeline إلى runFastPipeline (RSS + GDELT فقط) وrunFullPipeline (كل المصادر)
+- [ ] جدولة runFastPipeline كل 15 دقيقة
+- [ ] إبقاء runFullPipeline كل 6 ساعات (ACLED + World Bank + EIA)
+- [ ] إضافة حقل source_type في pipeline log (fast/full)
+- [ ] إضافة مؤشر "FAST" vs "FULL" في Pipeline tab بالواجهة
+- [ ] تحديث pipeline status في Admin panel ليعرض آخر تشغيل سريع وآخر تشغيل كامل

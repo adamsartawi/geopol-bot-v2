@@ -270,26 +270,49 @@ async function fetchEIA(): Promise<RawEvent[]> {
  * China, India, Gulf States, and the Middle East.
  * Uses a CORS-free server-side fetch; parses minimal RSS/Atom XML.
  */
-const RSS_SOURCES: Array<{ name: string; url: string; country: string; bias: string }> = [
-  // Iran
-  { name: "IRNA",     url: "https://en.irna.ir/rss",                         country: "IR",  bias: "state" },
-  { name: "PressTV",  url: "https://www.presstv.ir/rss.xml",                  country: "IR",  bias: "state" },
-  { name: "Mehr",     url: "https://en.mehrnews.com/rss",                     country: "IR",  bias: "state" },
-  // Russia
-  { name: "TASS",     url: "https://tass.com/rss/v2.xml",                     country: "RU",  bias: "state" },
-  { name: "RT",       url: "https://www.rt.com/rss/",                         country: "RU",  bias: "state" },
-  { name: "Sputnik",  url: "https://sputnikglobe.com/export/rss2/archive/index.xml", country: "RU", bias: "state" },
-  // China
-  { name: "Xinhua",   url: "https://feeds.feedburner.com/xinhuanet/news",     country: "CN",  bias: "state" },
-  { name: "GlobalTimes", url: "https://www.globaltimes.cn/rss/outbrain.xml",  country: "CN",  bias: "state" },
-  { name: "CGTN",     url: "https://www.cgtn.com/subscribe/rss/section/world.do", country: "CN", bias: "state" },
-  // India
-  { name: "TheHindu", url: "https://www.thehindu.com/news/international/?service=rss", country: "IN", bias: "independent" },
-  { name: "NDTV",     url: "https://feeds.feedburner.com/ndtvnews-world-news", country: "IN", bias: "independent" },
-  // Gulf / Middle East
-  { name: "AlJazeera",url: "https://www.aljazeera.com/xml/rss/all.xml",       country: "GCC", bias: "independent" },
-  { name: "ArabNews", url: "https://www.arabnews.com/rss.xml",                country: "GCC", bias: "independent" },
-  { name: "GulfNews", url: "https://gulfnews.com/rss",                        country: "GCC", bias: "independent" },
+const RSS_SOURCES: Array<{ name: string; url: string; country: string; bias: string; tier: "fast" | "full" }> = [
+  // ── Cross-cutting international wires (fast tier — every 15 min) ──
+  { name: "Reuters",       url: "https://feeds.reuters.com/reuters/topNews",                    country: "US",  bias: "independent", tier: "fast" },
+  { name: "Reuters-World", url: "https://feeds.reuters.com/Reuters/worldNews",                  country: "US",  bias: "independent", tier: "fast" },
+  { name: "Reuters-Biz",   url: "https://feeds.reuters.com/reuters/businessNews",               country: "US",  bias: "independent", tier: "fast" },
+  { name: "AP",            url: "https://rsshub.app/apnews/topics/apf-intlnews",                country: "US",  bias: "independent", tier: "fast" },
+  { name: "AP-Politics",   url: "https://rsshub.app/apnews/topics/apf-politics",                country: "US",  bias: "independent", tier: "fast" },
+  { name: "Bloomberg",     url: "https://feeds.bloomberg.com/markets/news.rss",                 country: "US",  bias: "independent", tier: "fast" },
+  { name: "Bloomberg-Pol", url: "https://feeds.bloomberg.com/politics/news.rss",                country: "US",  bias: "independent", tier: "fast" },
+  { name: "CNBC",          url: "https://www.cnbc.com/id/100727362/device/rss/rss.html",        country: "US",  bias: "independent", tier: "fast" },
+  { name: "CNBC-World",    url: "https://www.cnbc.com/id/100003114/device/rss/rss.html",        country: "US",  bias: "independent", tier: "fast" },
+  { name: "FT",            url: "https://www.ft.com/rss/home/uk",                               country: "EU",  bias: "independent", tier: "fast" },
+  { name: "Economist",     url: "https://www.economist.com/latest/rss.xml",                     country: "EU",  bias: "independent", tier: "fast" },
+  { name: "WSJ",           url: "https://feeds.a.dj.com/rss/RSSWorldNews.xml",                  country: "US",  bias: "independent", tier: "fast" },
+  { name: "WSJ-Markets",   url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",                country: "US",  bias: "independent", tier: "fast" },
+  // ── Israel (fast tier) ──
+  { name: "TimesOfIsrael", url: "https://www.timesofisrael.com/feed/",                          country: "IL",  bias: "independent", tier: "fast" },
+  { name: "JPost",         url: "https://www.jpost.com/rss/rssfeedsheadlines.aspx",             country: "IL",  bias: "independent", tier: "fast" },
+  { name: "Haaretz",       url: "https://www.haaretz.com/cmlink/1.628765",                      country: "IL",  bias: "independent", tier: "fast" },
+  { name: "i24News",       url: "https://www.i24news.com/i24news_rss.xml",                      country: "IL",  bias: "independent", tier: "fast" },
+  // ── Iran (fast tier) ──
+  { name: "IranIntl",      url: "https://www.iranintl.com/en/rss",                              country: "IR",  bias: "independent", tier: "fast" },
+  { name: "IRNA",          url: "https://en.irna.ir/rss",                                       country: "IR",  bias: "state",       tier: "fast" },
+  { name: "PressTV",       url: "https://www.presstv.ir/rss.xml",                               country: "IR",  bias: "state",       tier: "fast" },
+  { name: "Mehr",          url: "https://en.mehrnews.com/rss",                                  country: "IR",  bias: "state",       tier: "fast" },
+  // ── Russia (fast tier) ──
+  { name: "MoscowTimes",   url: "https://www.themoscowtimes.com/rss/news",                      country: "RU",  bias: "independent", tier: "fast" },
+  { name: "TASS",          url: "https://tass.com/rss/v2.xml",                                  country: "RU",  bias: "state",       tier: "fast" },
+  { name: "RT",            url: "https://www.rt.com/rss/",                                      country: "RU",  bias: "state",       tier: "fast" },
+  { name: "Sputnik",       url: "https://sputnikglobe.com/export/rss2/archive/index.xml",       country: "RU",  bias: "state",       tier: "fast" },
+  // ── China (fast tier) ──
+  { name: "SCMP",          url: "https://www.scmp.com/rss/91/feed",                             country: "CN",  bias: "independent", tier: "fast" },
+  { name: "CaixinGlobal",  url: "https://www.caixinglobal.com/rss/",                            country: "CN",  bias: "independent", tier: "fast" },
+  { name: "Xinhua",        url: "https://feeds.feedburner.com/xinhuanet/news",                  country: "CN",  bias: "state",       tier: "fast" },
+  { name: "GlobalTimes",   url: "https://www.globaltimes.cn/rss/outbrain.xml",                  country: "CN",  bias: "state",       tier: "fast" },
+  { name: "CGTN",          url: "https://www.cgtn.com/subscribe/rss/section/world.do",          country: "CN",  bias: "state",       tier: "fast" },
+  // ── India (fast tier) ──
+  { name: "TheHindu",      url: "https://www.thehindu.com/news/international/?service=rss",     country: "IN",  bias: "independent", tier: "fast" },
+  { name: "NDTV",          url: "https://feeds.feedburner.com/ndtvnews-world-news",              country: "IN",  bias: "independent", tier: "fast" },
+  // ── Gulf / Middle East (fast tier) ──
+  { name: "AlJazeera",     url: "https://www.aljazeera.com/xml/rss/all.xml",                    country: "GCC", bias: "independent", tier: "fast" },
+  { name: "ArabNews",      url: "https://www.arabnews.com/rss.xml",                             country: "GCC", bias: "independent", tier: "fast" },
+  { name: "GulfNews",      url: "https://gulfnews.com/rss",                                     country: "GCC", bias: "independent", tier: "fast" },
 ];
 
 /** Minimal RSS/Atom XML parser — extracts <item> or <entry> elements */
@@ -631,7 +654,156 @@ async function applyKBUpdate(
   });
 }
 
-// ── Main Pipeline Runner ─────────────────────────────────────────────────────
+// ── Fast Pipeline Runner (RSS + GDELT only — runs every 15 min) ────────────
+export async function runFastPipeline(): Promise<{
+  success: boolean;
+  eventsIngested: number;
+  eventsClassified: number;
+  kbFieldsUpdated: number;
+  runId: string;
+  error?: string;
+}> {
+  const runId = `fast-${nanoid(12)}`;
+  const db = await getDb();
+  if (!db) {
+    return { success: false, eventsIngested: 0, eventsClassified: 0, kbFieldsUpdated: 0, runId, error: "Database not available" };
+  }
+
+  await db.insert(pipelineRuns).values({
+    runId,
+    status: "running",
+    sourcesQueried: [],
+    eventsIngested: 0,
+    eventsClassified: 0,
+    kbFieldsUpdated: 0,
+    startedAt: new Date(),
+  });
+
+  console.log(`[Pipeline:FAST] Run ${runId} started`);
+
+  let eventsIngested = 0;
+  let eventsClassified = 0;
+  let kbFieldsUpdated = 0;
+  const sourcesQueried: string[] = [];
+
+  try {
+    // Fetch only fast-tier RSS sources + GDELT
+    const fastRssSources = RSS_SOURCES.filter(s => s.tier === "fast");
+    const originalSources = RSS_SOURCES.splice(0, RSS_SOURCES.length, ...fastRssSources);
+    const [gdeltEvents, rssEvents] = await Promise.allSettled([
+      fetchGDELT(),
+      fetchRSSFeeds(),
+    ]);
+    // Restore original sources
+    RSS_SOURCES.splice(0, RSS_SOURCES.length, ...originalSources);
+
+    const allRawEvents: RawEvent[] = [];
+    const addEvents = (result: PromiseSettledResult<RawEvent[]>, sourceName: string) => {
+      if (result.status === "fulfilled" && result.value.length > 0) {
+        allRawEvents.push(...result.value);
+        sourcesQueried.push(sourceName);
+        console.log(`[Pipeline:FAST] ${sourceName}: ${result.value.length} events`);
+      }
+    };
+    addEvents(gdeltEvents, "GDELT");
+    addEvents(rssEvents, "RSS");
+
+    eventsIngested = allRawEvents.length;
+    console.log(`[Pipeline:FAST] Total events ingested: ${eventsIngested}`);
+
+    // Store raw events
+    const storedEventIds: number[] = [];
+    for (const event of allRawEvents) {
+      try {
+        const [result] = await db.insert(pipelineEvents).values({
+          source: event.source,
+          sourceUrl: event.sourceUrl ?? null,
+          eventTitle: event.title,
+          eventSummary: event.summary,
+          eventDate: event.eventDate,
+          affectedCountries: [],
+          wrdiDimension: null,
+          severityScore: null,
+          relevanceScore: null,
+          processed: false,
+          appliedToKnowledgeBase: false,
+          rawData: event.rawData,
+          fetchedAt: new Date(),
+        } as any);
+        storedEventIds.push((result as any).insertId);
+      } catch {
+        // Skip duplicates
+      }
+    }
+
+    // Classify events
+    console.log(`[Pipeline:FAST] Classifying ${allRawEvents.length} events...`);
+    const countryEventMap: Record<string, Array<{ dimension: string; severityScore: number }>> = {};
+    COUNTRY_IDS.forEach(id => { countryEventMap[id] = []; });
+
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < allRawEvents.length; i += BATCH_SIZE) {
+      const batch = allRawEvents.slice(i, i + BATCH_SIZE);
+      const classifications = await Promise.allSettled(batch.map(e => classifyEvent(e)));
+      for (let j = 0; j < batch.length; j++) {
+        const classResult = classifications[j];
+        const eventIdx = storedEventIds[i + j];
+        if (classResult.status !== "fulfilled" || !classResult.value) continue;
+        const classification = classResult.value;
+        eventsClassified++;
+        if (eventIdx) {
+          await db.update(pipelineEvents)
+            .set({
+              affectedCountries: classification.affectedCountries,
+              wrdiDimension: classification.wrdiDimension,
+              severityScore: classification.severityScore,
+              relevanceScore: classification.relevanceScore,
+              processed: true,
+            })
+            .where(eq(pipelineEvents.id, eventIdx));
+        }
+        for (const countryId of classification.affectedCountries) {
+          if (COUNTRY_IDS.includes(countryId)) {
+            countryEventMap[countryId].push({ dimension: classification.wrdiDimension, severityScore: classification.severityScore });
+          }
+        }
+        for (const update of classification.kbUpdates) {
+          try {
+            await applyKBUpdate(db, update, runId, eventIdx ? [eventIdx] : []);
+            kbFieldsUpdated++;
+          } catch (e) {
+            console.warn(`[Pipeline:FAST] KB update failed:`, (e as Error).message);
+          }
+        }
+      }
+    }
+
+    // Recalculate WRDI scores
+    console.log(`[Pipeline:FAST] Recalculating WRDI scores...`);
+    for (const countryId of COUNTRY_IDS) {
+      const events = countryEventMap[countryId];
+      if (events.length === 0) continue;
+      await recalculateWRDIScores(db as DB, countryId, events);
+      console.log(`[Pipeline:FAST] WRDI updated for ${countryId} (${events.length} events)`);
+    }
+
+    await db.update(pipelineRuns)
+      .set({ status: "completed", sourcesQueried, eventsIngested, eventsClassified, kbFieldsUpdated, completedAt: new Date() })
+      .where(eq(pipelineRuns.runId, runId));
+
+    console.log(`[Pipeline:FAST] Run ${runId} completed: ${eventsIngested} ingested, ${eventsClassified} classified, ${kbFieldsUpdated} KB fields updated`);
+    return { success: true, eventsIngested, eventsClassified, kbFieldsUpdated, runId };
+  } catch (e) {
+    const errorMsg = (e as Error).message;
+    console.error(`[Pipeline:FAST] Run ${runId} failed:`, errorMsg);
+    await db.update(pipelineRuns)
+      .set({ status: "failed", errorMessage: errorMsg, completedAt: new Date() })
+      .where(eq(pipelineRuns.runId, runId));
+    return { success: false, eventsIngested, eventsClassified, kbFieldsUpdated, runId, error: errorMsg };
+  }
+}
+
+// ── Full Pipeline Runner (all sources — runs every 6 hours) ──────────────────
 export async function runPipeline(): Promise<{
   success: boolean;
   eventsIngested: number;

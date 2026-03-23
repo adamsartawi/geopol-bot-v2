@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -8,7 +7,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { geopolRouter } from "../geopol";
-import { runPipeline } from "../pipeline";
+import { runPipeline, runFastPipeline } from "../pipeline";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -65,24 +64,73 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
 
     // ── Automated Intelligence Pipeline Scheduler ────────────────────────────
-    // Run immediately on startup (after 30s delay to let DB settle),
-    // then every 6 hours.
-    const PIPELINE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
-    const STARTUP_DELAY_MS = 30 * 1000; // 30 seconds
+    //
+    // TWO-CADENCE DESIGN:
+    //   FAST  (every 15 min) — RSS feeds + GDELT only. Low cost, high freshness.
+    //   FULL  (every 6 hrs)  — All sources: ACLED, World Bank, IMF, UNHCR, EIA + RSS + GDELT.
+    //
+    // On startup: run FULL once (after 30s), then start both intervals.
+
+    const FAST_INTERVAL_MS  = 15 * 60 * 1000;       // 15 minutes
+    const FULL_INTERVAL_MS  = 6 * 60 * 60 * 1000;   // 6 hours
+    const STARTUP_DELAY_MS  = 30 * 1000;             // 30 seconds
+
+    // Track whether a fast run is currently in progress to avoid overlap
+    let fastRunning = false;
+    let fullRunning = false;
 
     setTimeout(() => {
-      console.log("[Pipeline] Running initial pipeline on startup...");
+      // ── Startup: run FULL pipeline once ──────────────────────────────────
+      console.log("[Pipeline] Running initial FULL pipeline on startup...");
+      fullRunning = true;
       runPipeline()
-        .then(result => console.log(`[Pipeline] Startup run complete: ${JSON.stringify(result)}`))
-        .catch(e => console.error("[Pipeline] Startup run failed:", e));
+        .then(result => {
+          fullRunning = false;
+          console.log(`[Pipeline:FULL] Startup run complete: ${JSON.stringify(result)}`);
+        })
+        .catch(e => {
+          fullRunning = false;
+          console.error("[Pipeline:FULL] Startup run failed:", e);
+        });
 
-      // Schedule recurring runs every 6 hours
+      // ── Fast pipeline: every 15 minutes ──────────────────────────────────
       setInterval(() => {
-        console.log("[Pipeline] Running scheduled pipeline...");
+        if (fastRunning || fullRunning) {
+          console.log("[Pipeline:FAST] Skipping — another run already in progress");
+          return;
+        }
+        console.log("[Pipeline:FAST] Running scheduled fast pipeline (RSS + GDELT)...");
+        fastRunning = true;
+        runFastPipeline()
+          .then(result => {
+            fastRunning = false;
+            console.log(`[Pipeline:FAST] Scheduled run complete: ${JSON.stringify(result)}`);
+          })
+          .catch(e => {
+            fastRunning = false;
+            console.error("[Pipeline:FAST] Scheduled run failed:", e);
+          });
+      }, FAST_INTERVAL_MS);
+
+      // ── Full pipeline: every 6 hours ──────────────────────────────────────
+      setInterval(() => {
+        if (fullRunning) {
+          console.log("[Pipeline:FULL] Skipping — full run already in progress");
+          return;
+        }
+        console.log("[Pipeline:FULL] Running scheduled full pipeline (all sources)...");
+        fullRunning = true;
         runPipeline()
-          .then(result => console.log(`[Pipeline] Scheduled run complete: ${JSON.stringify(result)}`))
-          .catch(e => console.error("[Pipeline] Scheduled run failed:", e));
-      }, PIPELINE_INTERVAL_MS);
+          .then(result => {
+            fullRunning = false;
+            console.log(`[Pipeline:FULL] Scheduled run complete: ${JSON.stringify(result)}`);
+          })
+          .catch(e => {
+            fullRunning = false;
+            console.error("[Pipeline:FULL] Scheduled run failed:", e);
+          });
+      }, FULL_INTERVAL_MS);
+
     }, STARTUP_DELAY_MS);
   });
 }

@@ -73,8 +73,21 @@ function DimensionBadge({ dimension }: { dimension: string | null }) {
 }
 
 // ── Sub-panels ───────────────────────────────────────────────────────────────
+function RunTypeBadge({ runId }: { runId: string }) {
+  const isFast = runId.startsWith("fast-");
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono"
+      style={isFast
+        ? { background: "rgba(0,212,255,0.08)", color: "#00d4ff", border: "1px solid rgba(0,212,255,0.2)" }
+        : { background: "rgba(255,193,7,0.08)", color: "#ffc107", border: "1px solid rgba(255,193,7,0.2)" }}>
+      {isFast ? <Zap size={9} /> : <Database size={9} />}
+      {isFast ? "FAST" : "FULL"}
+    </span>
+  );
+}
+
 function RunHistoryPanel() {
-  const { data: runs, isLoading, refetch } = trpc.pipeline.runs.useQuery({ limit: 10 });
+  const { data: runs, isLoading, refetch } = trpc.pipeline.runs.useQuery({ limit: 15 });
 
   if (isLoading) return (
     <div className="flex items-center justify-center py-8" style={{ color: "#555" }}>
@@ -95,13 +108,14 @@ function RunHistoryPanel() {
           style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
+              <RunTypeBadge runId={run.runId} />
               <StatusBadge status={run.status} />
               <span className="font-mono text-xs" style={{ color: "#555" }}>
                 {timeAgo(run.startedAt)}
               </span>
             </div>
             <span className="font-mono text-xs" style={{ color: "#444" }}>
-              {run.runId.slice(0, 8)}
+              {run.runId.replace("fast-", "").slice(0, 8)}
             </span>
           </div>
           <div className="grid grid-cols-3 gap-2 mt-2">
@@ -174,8 +188,15 @@ function EventLogPanel() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="px-1.5 py-0.5 rounded text-xs font-mono"
-                  style={{ background: "rgba(255,255,255,0.06)", color: "#888" }}>
-                  {event.source}
+                  style={{
+                    background: ["TASS","RT","Sputnik","Xinhua","GlobalTimes","CGTN","IRNA","PressTV","Mehr"].includes(event.source ?? "")
+                      ? "rgba(255,59,48,0.08)" : "rgba(255,255,255,0.06)",
+                    color: ["TASS","RT","Sputnik","Xinhua","GlobalTimes","CGTN","IRNA","PressTV","Mehr"].includes(event.source ?? "")
+                      ? "#ff6b6b" : "#888",
+                    border: ["TASS","RT","Sputnik","Xinhua","GlobalTimes","CGTN","IRNA","PressTV","Mehr"].includes(event.source ?? "")
+                      ? "1px solid rgba(255,59,48,0.2)" : "none",
+                  }}>
+                  {["TASS","RT","Sputnik","Xinhua","GlobalTimes","CGTN","IRNA","PressTV","Mehr"].includes(event.source ?? "") ? "⚑ " : ""}{event.source}
                 </span>
                 {event.wrdiDimension && <DimensionBadge dimension={event.wrdiDimension} />}
                 {event.severityScore != null && (
@@ -345,7 +366,10 @@ export default function PipelinePanel() {
                 </span>
               </div>
               <span className="text-xs font-mono" style={{ color: "#555" }}>
-                Next: ~{Math.max(0, 6 - Math.floor((Date.now() - new Date(latestRun.startedAt ?? Date.now()).getTime()) / 3600000))}h
+                {latestRun.runId?.startsWith("fast-")
+                  ? `Next fast: ~${Math.max(0, 15 - Math.floor((Date.now() - new Date(latestRun.startedAt ?? Date.now()).getTime()) / 60000))}m`
+                  : `Next full: ~${Math.max(0, 360 - Math.floor((Date.now() - new Date(latestRun.startedAt ?? Date.now()).getTime()) / 60000))}m`
+                }
               </span>
             </div>
             <div className="grid grid-cols-3 gap-3 mt-2">
@@ -417,8 +441,8 @@ export default function PipelinePanel() {
         <div className="flex items-start gap-2">
           <Info size={10} className="mt-0.5 shrink-0" style={{ color: "#444" }} />
           <p className="text-xs leading-relaxed" style={{ color: "#444" }}>
-            Pipeline runs every 6 hours. Sources: GDELT, ACLED, World Bank, IMF, UNHCR, EIA.
-            Events with severity ≥ 6 trigger knowledge base updates.
+            Fast pipeline (RSS + GDELT) runs every 15 min. Full pipeline (+ ACLED, World Bank, IMF, UNHCR, EIA) runs every 6h.
+            State media sources (⚑) are flagged. Events with severity ≥ 6 trigger knowledge base updates.
           </p>
         </div>
       </div>
