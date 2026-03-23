@@ -1,0 +1,81 @@
+{
+  "name": "GEOPOL-INT — Geopolitical Intelligence Engine",
+  "short_name": "GEOPOL-INT",
+  "description": "Real-time geopolitical risk analysis powered by AI. WRDI scoring, bilateral pair analysis, and live intelligence pipeline.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0e1a",
+  "theme_color": "#0a0e1a",
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "categories": ["news", "productivity", "finance"],
+  "icons": [
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-72x72_cb8427eb.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-96x96_4aaf2791.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-128x128_d384ed1a.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-144x144_bad76755.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-152x152_228b36dc.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-192x192_6584f44c.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-384x384_249578ee.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-512x512_6b949937.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Intelligence Dashboard",
+      "short_name": "Dashboard",
+      "description": "Open the main intelligence dashboard",
+      "url": "/",
+      "icons": [{ "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-96x96_4aaf2791.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Glossary",
+      "short_name": "Glossary",
+      "description": "WRDI terms and definitions",
+      "url": "/glossary",
+      "icons": [{ "src": "https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-96x96_4aaf2791.png", "sizes": "96x96" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

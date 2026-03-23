@@ -207,3 +207,12 @@
 - [x] RSS fetcher parses both RSS and Atom formats, filters to last 48h
 - [x] Source bias metadata (state/independent) included in raw event data
 - [x] Pipeline classifyEvent prompt updated to include IR, IN, GCC as monitored countries
+
+## Feature: PWA (Progressive Web App)
+- [x] إنشاء manifest.json مع اسم التطبيق وألوان وأيقونات
+- [x] توليد أيقونات بأحجام مختلفة (72, 96, 128, 144, 152, 192, 384, 512, apple-touch-icon)
+- [x] إضافة Service Worker للتخزين المؤقت (cache-first + network-first strategy)
+- [x] إضافة mobile meta tags في index.html (viewport, theme-color, apple, OG)
+- [x] إضافة apple-touch-icon لـ iOS
+- [x] إضافة PWAInstallPrompt component (Android + iOS instructions)
+- [x] إضافة safe-area-inset CSS variables لـ notch support

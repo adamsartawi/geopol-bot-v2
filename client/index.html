@@ -2,12 +2,55 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <!-- Mobile viewport: prevent zoom, full-screen feel -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+
     <title>GEOPOL-INT // Geopolitical Intelligence Engine</title>
-    <meta name="description" content="Real-time geopolitical intelligence engine connecting economic market data to political decision anticipation. Middle East impact analysis." />
+    <meta name="description" content="Real-time geopolitical intelligence engine connecting economic market data to political decision anticipation. WRDI scoring, bilateral pair analysis, live intelligence pipeline." />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Theme color (Android Chrome) -->
+    <meta name="theme-color" content="#0a0e1a" />
+    <meta name="msapplication-TileColor" content="#0a0e1a" />
+    <meta name="msapplication-TileImage" content="https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-144x144_bad76755.png" />
+
+    <!-- iOS PWA meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GEOPOL-INT" />
+    <link rel="apple-touch-icon" href="https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/apple-touch-icon_e07c3926.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/favicon-32x32_6abbf276.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-192x192_6584f44c.png" />
+
+    <!-- Open Graph (for sharing) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="GEOPOL-INT — Geopolitical Intelligence Engine" />
+    <meta property="og:description" content="Real-time geopolitical risk analysis. WRDI scoring, bilateral pair analysis, and live intelligence pipeline." />
+    <meta property="og:image" content="https://d2xsxph8kpxj0f.cloudfront.net/310519663242656098/TUUWwTL3ccHREs8KDzAWzE/icon-512x512_6b949937.png" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+    <!-- iOS safe area insets support -->
+    <style>
+      :root {
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+      }
+      body {
+        /* Prevent iOS rubber-band scrolling on the body */
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
@@ -16,5 +59,20 @@
       defer
       src="%VITE_ANALYTICS_ENDPOINT%/umami"
       data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
+
+    <!-- Register Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then((reg) => {
+              console.log('[SW] Registered:', reg.scope);
+            })
+            .catch((err) => {
+              console.warn('[SW] Registration failed:', err);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
