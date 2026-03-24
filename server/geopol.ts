@@ -81,8 +81,8 @@ geopolRouter.get("/api/geopol/kb-snapshot", async (_req: Request, res: Response)
   }
 });
 
-// ── LLM Streaming Chat ─────────────────────────────────────
-// Proxies streaming requests to Forge API using server-side key
+// ── LLM Chat via Gemini API (SSE-compatible) ──────────────
+// Calls Gemini generateContent and streams the response as SSE
 geopolRouter.post("/api/geopol/chat", async (req: Request, res: Response) => {
   const { messages } = req.body as {
     messages: Array<{ role: string; content: string }>;
@@ -93,24 +93,51 @@ geopolRouter.post("/api/geopol/chat", async (req: Request, res: Response) => {
     return;
   }
 
-  const forgeUrl = ENV.forgeApiUrl
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+  const apiKey = ENV.geminiApiKey;
+  if (!apiKey) {
+    res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+    return;
+  }
 
   try {
-    const response = await fetch(forgeUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${ENV.forgeApiKey}`,
+    // Separate system prompt from conversation
+    let systemInstruction: { parts: Array<{ text: string }> } | undefined;
+    const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+
+    for (const msg of messages) {
+      if (msg.role === "system") {
+        systemInstruction = { parts: [{ text: msg.content }] };
+        continue;
+      }
+      const geminiRole = msg.role === "assistant" ? "model" : "user";
+      const last = contents[contents.length - 1];
+      if (last && last.role === geminiRole) {
+        last.parts.push({ text: msg.content });
+      } else {
+        contents.push({ role: geminiRole, parts: [{ text: msg.content }] });
+      }
+    }
+
+    // Ensure last message is from user
+    if (contents.length === 0 || contents[contents.length - 1].role !== "user") {
+      contents.push({ role: "user", parts: [{ text: "Continue." }] });
+    }
+
+    const body: Record<string, unknown> = {
+      contents,
+      generationConfig: {
+        maxOutputTokens: 1200,
+        temperature: 0.3,
       },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages,
-        stream: true,
-        max_tokens: 800,   // Short conversational replies — data-grounded mode
-        temperature: 0.2,  // Low temperature: factual, deterministic, no hallucination
-      }),
+    };
+    if (systemInstruction) body.systemInstruction = systemInstruction;
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+    const response = await fetch(geminiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(60000),
     });
 
@@ -120,58 +147,39 @@ geopolRouter.post("/api/geopol/chat", async (req: Request, res: Response) => {
       return;
     }
 
-    // Set SSE headers
+    const geminiRes = await response.json() as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+        finishReason?: string;
+      }>;
+    };
+
+    const text = geminiRes.candidates?.[0]?.content?.parts
+      ?.map(p => p.text ?? "")
+      .join("") ?? "";
+
+    // Emit as SSE stream (simulate streaming by chunking the text)
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    // Pipe the stream
-    const reader = response.body?.getReader();
-    if (!reader) {
-      res.write("data: [DONE]\n\n");
-      res.end();
-      return;
+    // Stream in ~30-char chunks for smooth UI rendering
+    const CHUNK_SIZE = 30;
+    for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+      const chunk = text.slice(i, i + CHUNK_SIZE);
+      const sseData = JSON.stringify({
+        choices: [{ delta: { content: chunk }, index: 0 }],
+      });
+      res.write(`data: ${sseData}\n\n`);
+      if (typeof (res as unknown as { flush?: () => void }).flush === "function") {
+        (res as unknown as { flush: () => void }).flush();
+      }
     }
 
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    const pump = async () => {
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (line.trim()) {
-              res.write(line + "\n");
-            }
-          }
-          // Flush to client
-          if (typeof (res as unknown as { flush?: () => void }).flush === "function") {
-            (res as unknown as { flush: () => void }).flush();
-          }
-        }
-      } catch {
-        // Client disconnected
-      } finally {
-        res.write("data: [DONE]\n\n");
-        res.end();
-      }
-    };
-
-    pump();
-
-    // Handle client disconnect
-    req.on("close", () => {
-      reader.cancel();
-    });
+    res.write("data: [DONE]\n\n");
+    res.end();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Server error";
     if (!res.headersSent) {

@@ -19,7 +19,7 @@ export type FileContent = {
   type: "file_url";
   file_url: {
     url: string;
-    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4" ;
+    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4";
   };
 };
 
@@ -55,6 +55,28 @@ export type ToolChoice =
   | ToolChoiceByName
   | ToolChoiceExplicit;
 
+export type JsonSchema = {
+  name: string;
+  schema: Record<string, unknown>;
+  strict?: boolean;
+};
+
+export type OutputSchema = JsonSchema;
+
+export type ResponseFormat =
+  | { type: "text" }
+  | { type: "json_object" }
+  | { type: "json_schema"; json_schema: JsonSchema };
+
+export type ToolCall = {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+};
+
 export type InvokeParams = {
   messages: Message[];
   tools?: Tool[];
@@ -66,15 +88,6 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
-};
-
-export type ToolCall = {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
 };
 
 export type InvokeResult = {
@@ -97,236 +110,167 @@ export type InvokeResult = {
   };
 };
 
-export type JsonSchema = {
-  name: string;
-  schema: Record<string, unknown>;
-  strict?: boolean;
-};
+// ── Gemini API types ─────────────────────────────────────────────────────────
 
-export type OutputSchema = JsonSchema;
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+}
 
-export type ResponseFormat =
-  | { type: "text" }
-  | { type: "json_object" }
-  | { type: "json_schema"; json_schema: JsonSchema };
+interface GeminiContent {
+  role: "user" | "model";
+  parts: GeminiPart[];
+}
 
-const ensureArray = (
-  value: MessageContent | MessageContent[]
-): MessageContent[] => (Array.isArray(value) ? value : [value]);
+interface GeminiCandidate {
+  content: GeminiContent;
+  finishReason: string;
+  index: number;
+}
 
-const normalizeContentPart = (
-  part: MessageContent
-): TextContent | ImageContent | FileContent => {
-  if (typeof part === "string") {
-    return { type: "text", text: part };
-  }
+interface GeminiResponse {
+  candidates: GeminiCandidate[];
+  usageMetadata?: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
+}
 
-  if (part.type === "text") {
-    return part;
-  }
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-  if (part.type === "image_url") {
-    return part;
-  }
-
-  if (part.type === "file_url") {
-    return part;
-  }
-
-  throw new Error("Unsupported message content part");
-};
-
-const normalizeMessage = (message: Message) => {
-  const { role, name, tool_call_id } = message;
-
-  if (role === "tool" || role === "function") {
-    const content = ensureArray(message.content)
-      .map(part => (typeof part === "string" ? part : JSON.stringify(part)))
+function extractText(content: MessageContent | MessageContent[]): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map(p => (typeof p === "string" ? p : p.type === "text" ? p.text : ""))
       .join("\n");
-
-    return {
-      role,
-      name,
-      tool_call_id,
-      content,
-    };
   }
+  if (content.type === "text") return content.text;
+  return "";
+}
 
-  const contentParts = ensureArray(message.content).map(normalizeContentPart);
+/**
+ * Convert OpenAI-style messages to Gemini contents + system instruction.
+ * Gemini uses role "user" | "model" and requires alternating turns.
+ */
+function toGeminiContents(messages: Message[]): {
+  systemInstruction?: { parts: GeminiPart[] };
+  contents: GeminiContent[];
+} {
+  let systemInstruction: { parts: GeminiPart[] } | undefined;
+  const contents: GeminiContent[] = [];
 
-  // If there's only text content, collapse to a single string for compatibility
-  if (contentParts.length === 1 && contentParts[0].type === "text") {
-    return {
-      role,
-      name,
-      content: contentParts[0].text,
-    };
-  }
+  for (const msg of messages) {
+    const text = extractText(msg.content);
 
-  return {
-    role,
-    name,
-    content: contentParts,
-  };
-};
-
-const normalizeToolChoice = (
-  toolChoice: ToolChoice | undefined,
-  tools: Tool[] | undefined
-): "none" | "auto" | ToolChoiceExplicit | undefined => {
-  if (!toolChoice) return undefined;
-
-  if (toolChoice === "none" || toolChoice === "auto") {
-    return toolChoice;
-  }
-
-  if (toolChoice === "required") {
-    if (!tools || tools.length === 0) {
-      throw new Error(
-        "tool_choice 'required' was provided but no tools were configured"
-      );
+    if (msg.role === "system") {
+      // Gemini handles system prompts via systemInstruction
+      systemInstruction = { parts: [{ text }] };
+      continue;
     }
 
-    if (tools.length > 1) {
-      throw new Error(
-        "tool_choice 'required' needs a single tool or specify the tool name explicitly"
-      );
+    const geminiRole: "user" | "model" =
+      msg.role === "assistant" ? "model" : "user";
+
+    // Merge consecutive same-role messages (Gemini requires alternating)
+    const last = contents[contents.length - 1];
+    if (last && last.role === geminiRole) {
+      last.parts.push({ text });
+    } else {
+      contents.push({ role: geminiRole, parts: [{ text }] });
     }
-
-    return {
-      type: "function",
-      function: { name: tools[0].function.name },
-    };
   }
 
-  if ("name" in toolChoice) {
-    return {
-      type: "function",
-      function: { name: toolChoice.name },
-    };
+  // Gemini requires the last message to be from "user"
+  if (contents.length === 0 || contents[contents.length - 1].role !== "user") {
+    contents.push({ role: "user", parts: [{ text: "Continue." }] });
   }
 
-  return toolChoice;
-};
+  return { systemInstruction, contents };
+}
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+// ── Main invokeLLM ────────────────────────────────────────────────────────────
 
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-};
-
-const normalizeResponseFormat = ({
-  responseFormat,
-  response_format,
-  outputSchema,
-  output_schema,
-}: {
-  responseFormat?: ResponseFormat;
-  response_format?: ResponseFormat;
-  outputSchema?: OutputSchema;
-  output_schema?: OutputSchema;
-}):
-  | { type: "json_schema"; json_schema: JsonSchema }
-  | { type: "text" }
-  | { type: "json_object" }
-  | undefined => {
-  const explicitFormat = responseFormat || response_format;
-  if (explicitFormat) {
-    if (
-      explicitFormat.type === "json_schema" &&
-      !explicitFormat.json_schema?.schema
-    ) {
-      throw new Error(
-        "responseFormat json_schema requires a defined schema object"
-      );
-    }
-    return explicitFormat;
-  }
-
-  const schema = outputSchema || output_schema;
-  if (!schema) return undefined;
-
-  if (!schema.name || !schema.schema) {
-    throw new Error("outputSchema requires both name and schema");
-  }
-
-  return {
-    type: "json_schema",
-    json_schema: {
-      name: schema.name,
-      schema: schema.schema,
-      ...(typeof schema.strict === "boolean" ? { strict: schema.strict } : {}),
-    },
-  };
-};
+const GEMINI_MODEL = "gemini-2.0-flash";
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+  const apiKey = ENV.geminiApiKey;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
 
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-  } = params;
+  const { messages, responseFormat, response_format, outputSchema, output_schema } = params;
+  const { systemInstruction, contents } = toGeminiContents(messages);
 
-  const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
-    messages: messages.map(normalizeMessage),
+  // Build generation config
+  const generationConfig: Record<string, unknown> = {
+    maxOutputTokens: params.maxTokens ?? params.max_tokens ?? 8192,
+    temperature: 0.7,
   };
 
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
+  // Handle JSON output
+  const fmt = responseFormat ?? response_format;
+  const schema = outputSchema ?? output_schema;
+  if (fmt?.type === "json_object" || fmt?.type === "json_schema" || schema) {
+    generationConfig.responseMimeType = "application/json";
+    if (schema?.schema) {
+      generationConfig.responseSchema = schema.schema;
+    } else if (fmt?.type === "json_schema" && (fmt as { type: string; json_schema: JsonSchema }).json_schema?.schema) {
+      generationConfig.responseSchema = (fmt as { type: string; json_schema: JsonSchema }).json_schema.schema;
+    }
   }
 
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
+  const body: Record<string, unknown> = {
+    contents,
+    generationConfig,
+  };
+
+  if (systemInstruction) {
+    body.systemInstruction = systemInstruction;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
-  }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
-  });
-
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-
-  const response = await fetch(resolveApiUrl(), {
+  const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      `Gemini API failed: ${response.status} ${response.statusText} – ${errorText}`
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  const geminiRes = (await response.json()) as GeminiResponse;
+
+  // Normalise to OpenAI-compatible InvokeResult
+  const candidate = geminiRes.candidates?.[0];
+  const text = candidate?.content?.parts?.map(p => p.text ?? "").join("") ?? "";
+
+  return {
+    id: `gemini-${Date.now()}`,
+    created: Math.floor(Date.now() / 1000),
+    model: GEMINI_MODEL,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: text,
+        },
+        finish_reason: candidate?.finishReason ?? "stop",
+      },
+    ],
+    usage: geminiRes.usageMetadata
+      ? {
+          prompt_tokens: geminiRes.usageMetadata.promptTokenCount,
+          completion_tokens: geminiRes.usageMetadata.candidatesTokenCount,
+          total_tokens: geminiRes.usageMetadata.totalTokenCount,
+        }
+      : undefined,
+  };
 }

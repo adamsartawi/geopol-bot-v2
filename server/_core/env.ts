@@ -9,4 +9,5 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   acledEmail: process.env.ACLED_EMAIL ?? "",
   acledPassword: process.env.ACLED_PASSWORD ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
 };
